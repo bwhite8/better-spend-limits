@@ -120,7 +120,7 @@ export function SpendOverTimeChart({ points, watermarkDate }: SpendOverTimeChart
   }
 
   return (
-    <div data-testid="spend-chart" className="h-72 w-full">
+    <div data-testid="spend-chart" className="h-56 w-full sm:h-72">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200 dark:stroke-slate-800" />
@@ -128,14 +128,14 @@ export function SpendOverTimeChart({ points, watermarkDate }: SpendOverTimeChart
             dataKey="date"
             tickFormatter={(date: string) => date.slice(5)}
             interval="preserveStartEnd"
-            minTickGap={28}
+            minTickGap={40}
             tick={{ fontSize: 11 }}
             stroke="currentColor"
             className="text-slate-400"
           />
           <YAxis
             tickFormatter={formatAxisMoney}
-            width={64}
+            width={48}
             tick={{ fontSize: 11 }}
             stroke="currentColor"
             className="text-slate-400"
@@ -214,7 +214,7 @@ export function TopSpenderBars({ rows }: { rows: SpenderBar[] }) {
           >
             <Link
               href={`/members/${row.employeeId}`}
-              className="w-44 shrink-0 truncate text-indigo-700 hover:underline dark:text-indigo-300"
+              className="w-28 shrink-0 truncate text-indigo-700 hover:underline sm:w-44 dark:text-indigo-300"
             >
               {row.name}
             </Link>
@@ -225,7 +225,9 @@ export function TopSpenderBars({ rows }: { rows: SpenderBar[] }) {
                 style={{ width: `${width}%` }}
               />
             </span>
-            <span className="w-24 shrink-0 text-right tabular-nums">{formatMoney(row.amount)}</span>
+            <span className="w-20 shrink-0 text-right tabular-nums sm:w-24">
+              {formatMoney(row.amount)}
+            </span>
           </li>
         );
       })}

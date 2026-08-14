@@ -97,7 +97,7 @@ export function AmountInput({
           aria-describedby={error === null ? undefined : `${inputId}-error`}
           data-testid="amount-input"
           onChange={(event) => handleChange(event.target.value)}
-          className="w-36 rounded border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-900"
+          className="min-h-11 w-36 rounded border border-slate-300 px-2 py-2 text-sm md:min-h-0 md:py-1 dark:border-slate-600 dark:bg-slate-900"
         />
       </div>
       {error === null ? null : (

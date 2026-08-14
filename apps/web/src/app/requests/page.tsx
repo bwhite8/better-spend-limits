@@ -62,7 +62,7 @@ function TabLink({ tab, current, label, count }: { tab: Tab; current: Tab; label
       data-testid={`tab-${tab}`}
       data-active={active}
       aria-current={active ? "page" : undefined}
-      className={`rounded px-3 py-1.5 text-sm font-medium ${
+      className={`inline-flex min-h-11 items-center justify-center gap-1 rounded px-3 py-2 text-sm font-medium md:block md:min-h-0 md:py-1.5 ${
         active
           ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
           : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"

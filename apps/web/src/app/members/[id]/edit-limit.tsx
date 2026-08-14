@@ -153,7 +153,7 @@ export function EditLimit({
             onClick={openSet}
             disabled={pending}
             data-testid="set-limit"
-            className="rounded bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+            className="inline-flex min-h-11 items-center justify-center rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
           >
             Set limit
           </button>
@@ -163,7 +163,7 @@ export function EditLimit({
               onClick={openRemove}
               disabled={pending}
               data-testid="remove-override"
-              className="rounded border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-100 disabled:opacity-60 dark:border-slate-600 dark:hover:bg-slate-800"
+              className="inline-flex min-h-11 items-center justify-center rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs dark:border-slate-600 dark:hover:bg-slate-800"
             >
               Remove override
             </button>
@@ -200,7 +200,7 @@ export function EditLimit({
               onClick={save}
               disabled={pending || minorUnits === null}
               data-testid="limit-save"
-              className="rounded bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+              className="inline-flex min-h-11 items-center justify-center rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
             >
               {pending ? "Saving…" : "Save"}
             </button>
@@ -209,7 +209,7 @@ export function EditLimit({
               onClick={() => setDialog(null)}
               disabled={pending}
               data-testid="limit-cancel"
-              className="rounded border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-100 disabled:opacity-60 dark:border-slate-600 dark:hover:bg-slate-800"
+              className="inline-flex min-h-11 items-center justify-center rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs dark:border-slate-600 dark:hover:bg-slate-800"
             >
               Cancel
             </button>
@@ -237,7 +237,7 @@ export function EditLimit({
               onClick={remove}
               disabled={pending}
               data-testid="remove-confirm"
-              className="rounded bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-60"
+              className="inline-flex min-h-11 items-center justify-center rounded bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
             >
               {pending ? "Removing…" : "Remove override"}
             </button>
@@ -246,7 +246,7 @@ export function EditLimit({
               onClick={() => setDialog(null)}
               disabled={pending}
               data-testid="remove-cancel"
-              className="rounded border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-100 disabled:opacity-60 dark:border-slate-600 dark:hover:bg-slate-800"
+              className="inline-flex min-h-11 items-center justify-center rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs dark:border-slate-600 dark:hover:bg-slate-800"
             >
               Cancel
             </button>

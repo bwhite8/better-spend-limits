@@ -109,7 +109,7 @@ export function RequestActions({
         disabled={pending}
         data-testid={testId}
         onChange={(event) => setSuppress(event.target.checked)}
-        className="h-3.5 w-3.5"
+        className="h-5 w-5 shrink-0 md:h-3.5 md:w-3.5"
       />
       Don&rsquo;t notify {requesterName}
     </label>
@@ -123,7 +123,7 @@ export function RequestActions({
           onClick={openApprove}
           disabled={pending}
           data-testid="approve-open"
-          className="rounded bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+          className="inline-flex min-h-11 items-center justify-center rounded bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
         >
           Approve
         </button>
@@ -132,7 +132,7 @@ export function RequestActions({
           onClick={openDeny}
           disabled={pending}
           data-testid="deny-open"
-          className="rounded border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-100 disabled:opacity-60 dark:border-slate-600 dark:hover:bg-slate-800"
+          className="inline-flex min-h-11 items-center justify-center rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs dark:border-slate-600 dark:hover:bg-slate-800"
         >
           Deny
         </button>
@@ -163,7 +163,7 @@ export function RequestActions({
               onClick={approve}
               disabled={pending || minorUnits === null}
               data-testid="approve-confirm"
-              className="rounded bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+              className="inline-flex min-h-11 items-center justify-center rounded bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
             >
               {pending ? "Approving…" : "Approve"}
             </button>
@@ -172,7 +172,7 @@ export function RequestActions({
               onClick={() => setDialog(null)}
               disabled={pending}
               data-testid="approve-cancel"
-              className="rounded border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-100 disabled:opacity-60 dark:border-slate-600 dark:hover:bg-slate-800"
+              className="inline-flex min-h-11 items-center justify-center rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs dark:border-slate-600 dark:hover:bg-slate-800"
             >
               Cancel
             </button>
@@ -200,7 +200,7 @@ export function RequestActions({
               onClick={deny}
               disabled={pending}
               data-testid="deny-confirm"
-              className="rounded bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-60"
+              className="inline-flex min-h-11 items-center justify-center rounded bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
             >
               {pending ? "Denying…" : "Deny request"}
             </button>
@@ -209,7 +209,7 @@ export function RequestActions({
               onClick={() => setDialog(null)}
               disabled={pending}
               data-testid="deny-cancel"
-              className="rounded border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-100 disabled:opacity-60 dark:border-slate-600 dark:hover:bg-slate-800"
+              className="inline-flex min-h-11 items-center justify-center rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs dark:border-slate-600 dark:hover:bg-slate-800"
             >
               Cancel
             </button>

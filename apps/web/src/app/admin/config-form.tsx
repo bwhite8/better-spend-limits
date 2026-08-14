@@ -99,7 +99,7 @@ export function ConfigForm({ initial }: ConfigFormProps) {
                 disabled={pending}
                 data-testid={`config-role-${role}`}
                 onChange={(event) => toggleRole(role, event.target.checked)}
-                className="h-3.5 w-3.5"
+                className="h-5 w-5 shrink-0 md:h-3.5 md:w-3.5"
               />
               {ROLE_LABELS[role]}
             </label>
@@ -138,7 +138,7 @@ export function ConfigForm({ initial }: ConfigFormProps) {
             setResult(null);
             setSuppress(event.target.checked);
           }}
-          className="h-3.5 w-3.5"
+          className="h-5 w-5 shrink-0 md:h-3.5 md:w-3.5"
         />
         <span>
           <span className="font-medium">Suppress notifications by default</span>
@@ -176,7 +176,7 @@ export function ConfigForm({ initial }: ConfigFormProps) {
           onClick={save}
           disabled={pending || localError !== null}
           data-testid="config-save"
-          className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900"
+          className="inline-flex min-h-11 items-center justify-center rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60 md:min-h-0 md:py-1.5 dark:bg-slate-100 dark:text-slate-900"
         >
           {pending ? "Saving…" : "Save settings"}
         </button>

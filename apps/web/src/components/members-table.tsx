@@ -31,7 +31,19 @@ export interface MemberRow {
   synced: boolean;
 }
 
-const HEADERS = ["Name", "Email", "Effective limit", "Source", "Period-to-date spend", ""];
+/**
+ * Column headers. `className` travels with the label so a column can be hidden
+ * in both places at once — the header and its body cell must disappear
+ * together, or the remaining cells shift a column to the left.
+ */
+const HEADERS: { label: string; className?: string }[] = [
+  { label: "Name" },
+  { label: "Email", className: "hidden sm:table-cell" },
+  { label: "Effective limit" },
+  { label: "Source" },
+  { label: "Period-to-date spend" },
+  { label: "" },
+];
 
 export function MembersTable({ rows }: { rows: MemberRow[] }) {
   const [query, setQuery] = useState("");
@@ -55,7 +67,7 @@ export function MembersTable({ rows }: { rows: MemberRow[] }) {
           aria-label="Search members"
           data-testid="member-search"
           onChange={(event) => setQuery(event.target.value)}
-          className="w-64 rounded border border-slate-300 px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+          className="w-full rounded border border-slate-300 px-2 py-1 text-sm sm:w-64 dark:border-slate-700 dark:bg-slate-900"
         />
         <span className="text-sm text-slate-500" data-testid="member-count">
           {filtered.length} of {rows.length}
@@ -72,8 +84,12 @@ export function MembersTable({ rows }: { rows: MemberRow[] }) {
             <thead>
               <tr className="border-b border-slate-200 text-left dark:border-slate-800">
                 {HEADERS.map((header, index) => (
-                  <th key={header || index} scope="col" className="px-2 py-2 font-medium text-slate-500">
-                    {header}
+                  <th
+                    key={header.label || index}
+                    scope="col"
+                    className={`px-2 py-2 font-medium text-slate-500 ${header.className ?? ""}`}
+                  >
+                    {header.label}
                   </th>
                 ))}
               </tr>
@@ -95,7 +111,7 @@ export function MembersTable({ rows }: { rows: MemberRow[] }) {
                       {row.name}
                     </Link>
                   </td>
-                  <td className="px-2 py-2 text-slate-500">{row.email}</td>
+                  <td className="hidden px-2 py-2 text-slate-500 sm:table-cell">{row.email}</td>
                   <td className="px-2 py-2 tabular-nums">
                     {row.synced ? (
                       <Money amount={row.amount} currency={row.currency} />

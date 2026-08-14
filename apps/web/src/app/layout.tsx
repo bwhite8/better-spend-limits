@@ -76,9 +76,19 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="en">
       <body className="min-h-screen font-sans">
-        <div className="flex min-h-screen">
+        {/*
+          Two shells, one DOM. Below `md` this is a normal column and the
+          DOCUMENT scrolls — deliberately, because an inner scroller stops iOS
+          Safari collapsing its URL bar and permanently costs vertical space.
+          At `md`+ the wrapper is locked to the viewport (`md:h-dvh`) and
+          `<main>` becomes the only scrolling region, so the sidebar stays put.
+          `md:min-h-0` is load-bearing: without it the inherited `min-h-screen`
+          fights `h-dvh`, the wrapper can exceed the viewport, and document
+          scrolling comes back.
+        */}
+        <div className="flex min-h-screen flex-col md:h-dvh md:min-h-0 md:flex-row md:overflow-hidden">
           <Nav {...navProps} />
-          <main className="min-w-0 flex-1 p-6">{children}</main>
+          <main className="min-w-0 flex-1 p-4 md:overflow-y-auto md:p-6">{children}</main>
         </div>
       </body>
     </html>
