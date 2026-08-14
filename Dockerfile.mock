@@ -1,0 +1,46 @@
+# syntax=docker/dockerfile:1
+#
+# apps/mock-api — the local stand-in for api.anthropic.com.
+#
+# This image exists so the demo profile in docker-compose.yml has something to
+# talk to. It is NOT part of a production deployment: in production the web app
+# points at the real API and this service is simply absent.
+#
+# Debian rather than Alpine on purpose — the monorepo's install pulls in
+# better-sqlite3, which ships prebuilt binaries for glibc but has to be compiled
+# from source on musl.
+
+FROM node:22-bookworm-slim
+
+# `@playwright/test` is a devDependency of apps/web and would otherwise download
+# a browser bundle no container here will ever open.
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+# Build as an unprivileged user from the start; this avoids a `chown -R` over
+# node_modules later, which would double the layer size.
+RUN mkdir -p /app && chown -R node:node /app
+USER node
+WORKDIR /app
+
+# Manifests first, so a source-only change does not re-run the install.
+COPY --chown=node:node package.json package-lock.json ./
+COPY --chown=node:node apps/web/package.json apps/web/
+COPY --chown=node:node apps/mock-api/package.json apps/mock-api/
+COPY --chown=node:node packages/shared/package.json packages/shared/
+COPY --chown=node:node packages/seed/package.json packages/seed/
+
+# `--include=dev`: the mock is run by `tsx`, which is a devDependency.
+RUN npm ci --include=dev
+
+COPY --chown=node:node . .
+
+# §G6 defaults. Override MOCK_SEED to generate a different synthetic org.
+ENV PORT=8787 \
+    MOCK_SEED=42 \
+    MOCK_ADMIN_KEY=mock-admin-key \
+    MOCK_ANALYTICS_KEY=mock-analytics-key \
+    MOCK_RATE_LIMIT=off
+
+EXPOSE 8787
+
+CMD ["npm", "run", "start", "-w", "apps/mock-api"]

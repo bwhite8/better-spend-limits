@@ -1,0 +1,6 @@
+employee_id,name,email,direct_manager_id,tier2_manager_id,tier3_manager_id,tier4_manager_id,aligned_ai_lead_id,is_admin
+emp_x001,Ada Lovelace,ada.lovelace@example.net,,,,,emp_x002,1
+emp_x002,Grace Hopper,grace.hopper@example.net,emp_x001,,,,emp_x001,0
+emp_x003,Katherine Johnson,katherine.johnson@example.net,emp_x002,emp_x001,,,emp_x002,0
+emp_x004,"Vaughan, Dorothy",dorothy.vaughan@example.net,emp_x003,emp_x002,emp_x001,,emp_x002,0
+emp_x005,Mary Jackson,mary.jackson@example.net,emp_x004,emp_x003,emp_x002,emp_x001,emp_x002,0
