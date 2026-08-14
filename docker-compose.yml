@@ -56,7 +56,10 @@ services:
       ANTHROPIC_ADMIN_KEY: mock-admin-key
       ANTHROPIC_ANALYTICS_KEY: mock-analytics-key
       # Dev auth: pick a persona from the switcher in the sidebar. There is no
-      # password on this; do not expose the demo beyond your own machine.
+      # password on this — whoever reaches it is whoever they select. That is
+      # fine here, and on the hosted sandbox, because the only organisation
+      # behind it is the mock's. It is never fine with a real Admin key, which
+      # is why docker-compose.prod.yml sets AUTH_MODE=proxy instead.
       AUTH_MODE: dev
       AUTH_HEADER: x-forwarded-email
       DATABASE_PATH: /data/app.db
