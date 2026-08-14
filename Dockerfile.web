@@ -8,12 +8,22 @@
 # into the runtime layer anyway. The result is a larger image in exchange for a
 # build that has no way to drift from `npm run build` on a laptop.
 #
-# Debian rather than Alpine: better-sqlite3 ships prebuilt binaries for glibc and
-# would otherwise be compiled from source against musl.
+# Debian rather than Alpine: better-sqlite3's prebuilt binaries are glibc, and
+# so is the source build the toolchain layer below exists to allow.
 
 FROM node:22-bookworm-slim
 
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+# better-sqlite3 ships a prebuilt `linux-x64` binary and sets `"gypfile": false`
+# to tell npm not to build it, but the npm bundled with this image runs
+# `node-gyp rebuild` for it regardless — which fails on a slim image with no
+# Python, taking the whole build with it. Installing the toolchain lets that
+# build succeed instead of betting on the heuristic. Runs as root, before the
+# USER switch below.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 # /data is the SQLite volume. Creating it in the image with `node` ownership is
 # what makes a fresh named volume writable by the unprivileged user.

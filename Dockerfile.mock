@@ -6,9 +6,9 @@
 # talk to. It is NOT part of a production deployment: in production the web app
 # points at the real API and this service is simply absent.
 #
-# Debian rather than Alpine on purpose — the monorepo's install pulls in
-# better-sqlite3, which ships prebuilt binaries for glibc but has to be compiled
-# from source on musl.
+# Debian rather than Alpine, matching Dockerfile.web. Nothing in this image is
+# native: the install below is scoped to apps/mock-api, which is pure
+# JavaScript, so the base is a consistency choice rather than a requirement.
 
 FROM node:22-bookworm-slim
 
@@ -22,15 +22,21 @@ RUN mkdir -p /app && chown -R node:node /app
 USER node
 WORKDIR /app
 
-# Manifests first, so a source-only change does not re-run the install.
+# Manifests first, so a source-only change does not re-run the install. Every
+# workspace's manifest is copied even though the install below is scoped to one
+# of them: `npm ci` validates the lockfile against all of them and fails if any
+# is missing.
 COPY --chown=node:node package.json package-lock.json ./
 COPY --chown=node:node apps/web/package.json apps/web/
 COPY --chown=node:node apps/mock-api/package.json apps/mock-api/
 COPY --chown=node:node packages/shared/package.json packages/shared/
 COPY --chown=node:node packages/seed/package.json packages/seed/
 
-# `--include=dev`: the mock is run by `tsx`, which is a devDependency.
-RUN npm ci --include=dev
+# Scoped to the one workspace this image runs. A bare `npm ci` installs the
+# whole monorepo, which drags in apps/web's better-sqlite3 — a native module the
+# mock never loads and this image has no compiler for, so the build died here.
+# `--include=dev` because the mock is run by `tsx`, a devDependency.
+RUN npm ci --include=dev -w apps/mock-api
 
 COPY --chown=node:node . .
 
