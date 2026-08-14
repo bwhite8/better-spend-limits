@@ -1,0 +1,258 @@
+/**
+ * Analytics — four questions the local snapshot can answer (plan §Phase 12).
+ *
+ *   1. Where is spend going over time, and how much of the recent tail is still
+ *      being revised?
+ *   2. Who is about to run out of headroom?
+ *   3. Whose usage just jumped?
+ *   4. Who are the biggest spenders this month?
+ *
+ * Everything is computed from `user_daily_cost` and `spend_limit_snapshot` by
+ * `lib/analytics-queries`, and every dataset is scoped to `visibleEmployees`
+ * first (§G8 option B). That matters more here than anywhere else in the app: an
+ * aggregate is exactly the kind of number that looks harmless while quietly
+ * summarising people the viewer has no business seeing. A manager's "org spend"
+ * is their team's spend, and the page says which it is showing.
+ *
+ * The freshness caveat is on the page rather than in a doc, because §G5 makes it
+ * a property of the data itself: anything after `data_refreshed_at` is an
+ * incomplete tail that may be revised for up to 30 days.
+ */
+
+import Link from "next/link";
+
+import { getDb } from "@/db/client";
+import { Money, SpendBar } from "@/components/money";
+import {
+  costWatermark,
+  dailyTotals,
+  nearLimit,
+  topSpenders,
+  trendWindowDays,
+  wowMovers,
+  DEFAULT_TREND_DAYS,
+  type NearLimitRow,
+  type WowMoverRow,
+} from "@/lib/analytics-queries";
+import { loadAppConfig } from "@/lib/config";
+import { currentEmployee } from "@/lib/identity";
+import { visibleEmployees } from "@/lib/permissions";
+import { ensureFreshSync } from "@/lib/sync-runner";
+
+import Forbidden from "../forbidden";
+import { SpendOverTimeChart, TopSpenderBars } from "./charts";
+
+export const dynamic = "force-dynamic";
+
+/** The jump a week has to make to count as a mover (plan §Phase 12). */
+const WOW_MULTIPLE = 3;
+
+/** Rows in the month-to-date bar list. */
+const TOP_SPENDER_COUNT = 10;
+
+function Section({
+  title,
+  caption,
+  children,
+}: {
+  title: string;
+  caption?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <article className="flex flex-col gap-3">
+      <header className="flex flex-col gap-0.5">
+        <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">{title}</h2>
+        {caption === undefined ? null : <p className="text-xs text-slate-500">{caption}</p>}
+      </header>
+      {children}
+    </article>
+  );
+}
+
+function MemberLink({
+  employeeId,
+  name,
+  testId,
+}: {
+  employeeId: string;
+  name: string;
+  testId: string;
+}) {
+  return (
+    <Link
+      href={`/members/${employeeId}`}
+      data-testid={testId}
+      className="font-medium text-indigo-700 hover:underline dark:text-indigo-300"
+    >
+      {name}
+    </Link>
+  );
+}
+
+function NearLimitTable({ rows }: { rows: NearLimitRow[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table data-testid="near-limit-table" className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-slate-200 text-left dark:border-slate-800">
+            {["Member", "Limit", "Period-to-date spend"].map((header) => (
+              <th key={header} scope="col" className="px-2 py-2 font-medium text-slate-500">
+                {header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr
+              key={row.employeeId}
+              data-testid="near-limit-row"
+              data-employee-id={row.employeeId}
+              className="border-b border-slate-100 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900"
+            >
+              <td className="px-2 py-2">
+                <MemberLink employeeId={row.employeeId} name={row.name} testId="near-limit-link" />
+                {row.atCap ? (
+                  <span
+                    data-testid="at-cap-flag"
+                    title="An explicit zero cap: included usage only (§G9)."
+                    className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-900 dark:bg-red-950 dark:text-red-200"
+                  >
+                    At cap
+                  </span>
+                ) : null}
+              </td>
+              <td className="px-2 py-2 tabular-nums">
+                <Money amount={row.amount} currency={row.currency} />
+              </td>
+              {/* `SpendBar` already renders the ratio (§Phase 9), so this table
+                  does not repeat it in a column of its own. */}
+              <td className="px-2 py-2" data-testid="near-limit-spend">
+                <SpendBar spend={row.spend} amount={row.amount} currency={row.currency} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function MoversTable({ rows }: { rows: WowMoverRow[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table data-testid="wow-table" className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-slate-200 text-left dark:border-slate-800">
+            {["Member", "Last 7 days", "Previous 7 days", "Change"].map((header) => (
+              <th key={header} scope="col" className="px-2 py-2 font-medium text-slate-500">
+                {header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr
+              key={row.employeeId}
+              data-testid="wow-row"
+              data-employee-id={row.employeeId}
+              className="border-b border-slate-100 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900"
+            >
+              <td className="px-2 py-2">
+                <MemberLink employeeId={row.employeeId} name={row.name} testId="wow-link" />
+              </td>
+              <td className="px-2 py-2 tabular-nums">
+                <Money amount={row.lastWeek} />
+              </td>
+              <td className="px-2 py-2 tabular-nums">
+                <Money amount={row.priorWeek} />
+              </td>
+              <td className="px-2 py-2 tabular-nums" data-testid="wow-multiple">
+                {row.multiple === null ? "new spend" : `${row.multiple.toFixed(1)}×`}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default async function AnalyticsPage() {
+  const db = getDb();
+  const actor = await currentEmployee(db);
+  if (actor === null) return <Forbidden />;
+
+  await ensureFreshSync(db);
+
+  const config = loadAppConfig(db);
+  const scope = visibleEmployees(db, actor, config.edit_roles).map((employee) => employee.id);
+
+  const now = new Date();
+  const watermark = costWatermark(db);
+  // Only as many days as are actually stored: the sync keeps a rolling window,
+  // and padding the chart with zeros would invent a quiet fortnight.
+  const days = trendWindowDays(db, scope, DEFAULT_TREND_DAYS, now);
+
+  const trend = dailyTotals(db, scope, days, { now, watermark });
+  const near = nearLimit(db, scope, config.near_limit_threshold);
+  const movers = wowMovers(db, scope, WOW_MULTIPLE, { now });
+  const top = topSpenders(db, scope, TOP_SPENDER_COUNT, { now });
+
+  const thresholdPercent = Math.round(config.near_limit_threshold * 100);
+
+  return (
+    <section className="flex flex-col gap-10">
+      <header className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
+        <p data-testid="analytics-scope" className="text-sm text-slate-500">
+          {actor.is_admin
+            ? `Organisation-wide, across all ${scope.length} members.`
+            : `Your scope: ${scope.length} ${scope.length === 1 ? "person" : "people"} you can view.`}
+        </p>
+      </header>
+
+      <Section
+        title="Spend over time"
+        caption={`Daily total across your scope, last ${days} days. Costs are synced for a rolling window, so the chart starts where the local data does.`}
+      >
+        <SpendOverTimeChart points={trend} watermarkDate={watermark?.slice(0, 10) ?? null} />
+      </Section>
+
+      <Section
+        title="Near limit"
+        caption={`Members at or above ${thresholdPercent}% of their effective cap. Members with no cap cannot be near one and are not listed.`}
+      >
+        {near.length === 0 ? (
+          <p data-testid="near-limit-empty" className="text-sm text-slate-500">
+            Nobody in your scope is within reach of their limit.
+          </p>
+        ) : (
+          <NearLimitTable rows={near} />
+        )}
+      </Section>
+
+      <Section
+        title="Week-over-week movers"
+        caption={`Members whose last 7 days cost at least ${WOW_MULTIPLE}× the 7 days before them.`}
+      >
+        {movers.length === 0 ? (
+          <p data-testid="wow-empty" className="text-sm text-slate-500">
+            No sharp week-over-week increases in your scope.
+          </p>
+        ) : (
+          <MoversTable rows={movers} />
+        )}
+      </Section>
+
+      <Section
+        title="Top spenders, month to date"
+        caption="Summed from daily cost since the first of the month; the most recent days may still be revised."
+      >
+        <TopSpenderBars rows={top} />
+      </Section>
+    </section>
+  );
+}
