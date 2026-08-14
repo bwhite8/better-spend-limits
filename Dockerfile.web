@@ -51,7 +51,11 @@ ENV NODE_ENV=production \
     AUTH_MODE=dev \
     AUTH_HEADER=x-forwarded-email
 
-VOLUME ["/data"]
+# There is deliberately no `VOLUME ["/data"]` here. Railway rejects the
+# instruction at parse time ("use Railway Volumes") before the build even
+# starts, and it bought nothing anyway: both compose files mount `bsl-data:/data`
+# explicitly, and a host that runs the image with no mount at all wants its data
+# in the container layer rather than in an anonymous volume it will never find.
 EXPOSE 3000
 
 # Migrations run on every start: they are idempotent, and the volume may be
