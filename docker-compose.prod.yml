@@ -1,0 +1,58 @@
+# Production example: the web app only, pointed at the real Anthropic API.
+#
+#   cp .env.example .env      # fill in the real values
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Read this before you run it:
+#
+#  1. There is no mock service here. That is deliberate — a production stack
+#     should have no path by which a misconfigured base URL lands on a fixture.
+#  2. `AUTH_MODE=proxy` means this container TRUSTS the header named by
+#     AUTH_HEADER. Anything that can reach port 3000 directly can therefore
+#     claim to be any employee, including an admin. Put it behind your SSO
+#     reverse proxy on a private network and never publish the port.
+#  3. There is no `db:seed`. The employee roster comes from your HRIS via the
+#     CSV import on /admin. Seeding here would replace it with 250 synthetic
+#     people.
+#  4. ANTHROPIC_ADMIN_KEY can set and remove spend limits and approve increase
+#     requests for your whole organisation. Inject it from your secret store —
+#     the `${VAR}` references below read from a local .env file, which is fine
+#     for a first deploy and not fine as a permanent arrangement.
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    environment:
+      # Leave unset to use the default https://api.anthropic.com. Set it only
+      # for a genuine proxy — and see the note about ambient shell variables in
+      # the README, which is how this ends up wrong.
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      ANTHROPIC_ADMIN_KEY: ${ANTHROPIC_ADMIN_KEY:?set ANTHROPIC_ADMIN_KEY}
+      ANTHROPIC_ANALYTICS_KEY: ${ANTHROPIC_ANALYTICS_KEY:?set ANTHROPIC_ANALYTICS_KEY}
+      AUTH_MODE: proxy
+      AUTH_HEADER: ${AUTH_HEADER:-x-forwarded-email}
+      DATABASE_PATH: /data/app.db
+    # Bound to loopback so the SSO proxy on this host can reach it and nothing
+    # else can. Remove the 127.0.0.1 prefix only if something else enforces auth.
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - bsl-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+
+volumes:
+  bsl-data:

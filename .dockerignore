@@ -1,0 +1,35 @@
+# Keep the build context small — and, more importantly, keep the HOST's
+# node_modules out of the image. `better-sqlite3` is a native addon compiled for
+# whatever machine ran `npm install`; copying a macOS build over the Linux one
+# that `npm ci` just produced would break the web image at runtime in a way that
+# looks like a Node bug rather than a packaging mistake.
+node_modules
+**/node_modules
+
+.git
+.gitignore
+
+# Build output — regenerated inside the image.
+.next
+**/.next
+dist
+**/dist
+*.tsbuildinfo
+
+# Local state and secrets.
+data
+**/data
+*.db
+*.db-journal
+*.db-wal
+.env
+.env.local
+**/.env.local
+
+# Test artefacts.
+playwright-report
+test-results
+coverage
+
+Dockerfile*
+docker-compose*.yml

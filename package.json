@@ -1,0 +1,36 @@
+{
+  "name": "better-spend-limits",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Open-source UI wrapper around the Claude Spend Limits and Analytics APIs.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n mock-api,web -c magenta,cyan \"npm run dev -w apps/mock-api\" \"npm run dev -w apps/web\"",
+    "test": "vitest run",
+    "test:e2e": "playwright test --config apps/web/playwright.config.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc -b",
+    "db:migrate": "npm run db:migrate -w apps/web",
+    "db:seed": "npm run db:seed -w apps/web",
+    "verify:api": "tsx apps/web/src/scripts/verify-real-api.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.10.0",
+    "concurrently": "^10.0.4",
+    "eslint": "^10.8.1",
+    "globals": "^17.11.0",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.1.10"
+  }
+}

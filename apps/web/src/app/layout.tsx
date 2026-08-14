@@ -1,0 +1,86 @@
+import type { Metadata } from "next";
+import { cookies, headers } from "next/headers";
+import type { ReactNode } from "react";
+
+import { getDb } from "@/db/client";
+import { employees } from "@/db/schema";
+import { Nav, type NavProps } from "@/components/nav";
+import { syncLabel } from "@/components/sync-label";
+import { switcherOptionsFor } from "@/components/switcher-groups";
+import { findEmployeeByEmail, resolveAuthMode, resolveCurrentEmail } from "@/lib/identity";
+import { isStale, oldestSyncedAt, readSyncState, SYNC_RESOURCES } from "@/lib/sync";
+import { ensureFreshSync } from "@/lib/sync-runner";
+
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "better-spend-limits",
+  description: "A UI for the Claude Spend Limits and Analytics APIs.",
+};
+
+// Identity comes from a cookie or a request header, so nothing here is static.
+export const dynamic = "force-dynamic";
+
+/**
+ * Everything the sidebar needs, in one pass over the database.
+ *
+ * A database that cannot be read (a clone where `db:migrate` has not run yet)
+ * degrades to an empty shell rather than a 500 — the nav is chrome, and chrome
+ * failing must not hide the page that would have told you what went wrong.
+ */
+async function loadNavProps(): Promise<NavProps> {
+  const [headerStore, cookieStore] = await Promise.all([headers(), cookies()]);
+  const email = resolveCurrentEmail(headerStore, cookieStore);
+  const devMode = resolveAuthMode() === "dev";
+
+  try {
+    const db = getDb();
+    const actor = findEmployeeByEmail(db, email);
+
+    // Sync here, in the layout, rather than only in the pages: React renders a
+    // parent before its children, so this is the one place that can read
+    // `sync_state` AFTER the refresh it triggered. Doing it page-side left the
+    // sidebar reporting "Never synced" next to freshly synced numbers.
+    // Gated on a resolved identity for the same reason `/api/sync` is: syncing
+    // spends the organisation's shared rate-limit budget (§G4).
+    if (actor !== null) await ensureFreshSync(db);
+
+    const roster = db.select().from(employees).orderBy(employees.name, employees.id).all();
+    const state = readSyncState(db).filter((row) =>
+      (SYNC_RESOURCES as readonly string[]).includes(row.resource),
+    );
+    const syncedAt = oldestSyncedAt(db);
+
+    return {
+      isAdmin: actor?.is_admin === true,
+      currentUser: actor === null ? null : { name: actor.name, email: actor.email },
+      // Dev mode only: in `proxy` mode the SSO header is the identity and the
+      // impersonation action throws, so offering the control would be a lie.
+      switcher: devMode ? { options: switcherOptionsFor(roster), currentEmail: email } : null,
+      sync: {
+        syncedAt,
+        initialLabel: syncLabel(syncedAt),
+        stale: isStale(db),
+        errored: state.some((row) => row.status === "error"),
+      },
+    };
+  } catch (error) {
+    console.error("[shell] could not build the sidebar:", error);
+    return { isAdmin: false, currentUser: null, switcher: null, sync: null };
+  }
+}
+
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const navProps = await loadNavProps();
+
+  return (
+    <html lang="en">
+      <body className="min-h-screen font-sans">
+        <div className="flex min-h-screen">
+          <Nav {...navProps} />
+          <main className="min-w-0 flex-1 p-6">{children}</main>
+        </div>
+      </body>
+    </html>
+  );
+}
