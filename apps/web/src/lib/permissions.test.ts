@@ -11,17 +11,19 @@ import { count, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createDb, type AppDatabase } from "@/db/client";
-import { APP_CONFIG_DEFAULTS, type EditRole } from "@/db/config-defaults";
+import { APP_CONFIG_DEFAULTS, EDIT_ROLE_VALUES, type EditRole } from "@/db/config-defaults";
 import { runMigrations } from "@/db/migrate";
 import { IN_MEMORY_DATABASE } from "@/db/paths";
-import { appConfig, employees, type Employee } from "@/db/schema";
+import { aiLeadAssignments, appConfig, employees, type Employee } from "@/db/schema";
 import { seedDatabase } from "@/db/seed";
 
 import { loadAppConfig } from "./config";
 import {
+  authorityIdsOf,
   canActOnRequest,
   canEdit,
   canView,
+  delegatedEditorsOf,
   editRoleColumn,
   editorIdsOf,
   loadEditRoles,
@@ -56,19 +58,43 @@ function setEditRoles(value: unknown): void {
 
 const DEFAULT_ROLES = APP_CONFIG_DEFAULTS.edit_roles;
 
+/** Delegate `leaderId` to `leadId`, the way the admin action would. */
+function assign(leadId: string, leaderId: string): void {
+  db.insert(aiLeadAssignments)
+    .values({
+      lead_employee_id: leadId,
+      leader_employee_id: leaderId,
+      created_at: "2026-08-14T00:00:00.000Z",
+    })
+    .run();
+}
+
 describe("editRoleColumn", () => {
   it("maps every allowed role onto a real `employees` column", () => {
-    for (const role of DEFAULT_ROLES) {
+    for (const role of EDIT_ROLE_VALUES) {
       expect(employees).toHaveProperty(editRoleColumn(role));
     }
-    expect(editRoleColumn("aligned_ai_lead")).toBe("aligned_ai_lead_id");
+    expect(editRoleColumn("tier4_manager")).toBe("tier4_manager_id");
     expect(editRoleColumn("tier3_manager")).toBe("tier3_manager_id");
+  });
+
+  /**
+   * §Phase 9 acceptance criterion 7. Removing the role is what makes the
+   * delegation table the only way an AI lead gets authority; leaving it legal
+   * would have left two mechanisms granting the same thing with different
+   * scopes. The COLUMN stays — it is real HRIS data and the member page shows it.
+   */
+  it("no longer offers `aligned_ai_lead` as a grantable role", () => {
+    expect(EDIT_ROLE_VALUES).toHaveLength(4);
+    expect(EDIT_ROLE_VALUES as readonly string[]).not.toContain("aligned_ai_lead");
+    expect(employees).toHaveProperty("aligned_ai_lead_id");
+    expect(row(FIXTURE.ic.id).aligned_ai_lead_id).toBe(FIXTURE.aiLeadOfIc.id);
   });
 });
 
 describe("loadEditRoles", () => {
   it("returns the seeded §G7 default", () => {
-    expect(loadEditRoles(db)).toEqual(["tier3_manager", "tier4_manager", "aligned_ai_lead"]);
+    expect(loadEditRoles(db)).toEqual(["tier3_manager", "tier4_manager"]);
   });
 
   it("reflects a configured value", () => {
@@ -118,7 +144,8 @@ describe("canEdit — default config, target = FIXTURE.ic", () => {
   it.each<[string, string, boolean]>([
     ["tier3ManagerOfIc", FIXTURE.tier3ManagerOfIc.id, true],
     ["tier4ManagerOfIc", FIXTURE.tier4ManagerOfIc.id, true],
-    ["aiLeadOfIc", FIXTURE.aiLeadOfIc.id, true],
+    // §Phase 9: the HRIS column no longer grants anything on its own.
+    ["aiLeadOfIc", FIXTURE.aiLeadOfIc.id, false],
     ["directManagerOfIc", FIXTURE.directManagerOfIc.id, false],
     ["unrelatedPeer", FIXTURE.unrelatedPeer.id, false],
     ["admin", FIXTURE.admin.id, true],
@@ -127,8 +154,8 @@ describe("canEdit — default config, target = FIXTURE.ic", () => {
     expect(canEdit(row(actorId), row(FIXTURE.ic.id), DEFAULT_ROLES)).toBe(expected);
   });
 
-  it("grants the three editing roles to people who are not admins", () => {
-    for (const id of [FIXTURE.tier3ManagerOfIc.id, FIXTURE.tier4ManagerOfIc.id, FIXTURE.aiLeadOfIc.id]) {
+  it("grants the two editing roles to people who are not admins", () => {
+    for (const id of [FIXTURE.tier3ManagerOfIc.id, FIXTURE.tier4ManagerOfIc.id]) {
       expect(row(id).is_admin).toBe(false);
     }
   });
@@ -195,11 +222,22 @@ describe("null hierarchy columns are skipped, not matched", () => {
       .filter((employee) => !employee.is_admin);
     expect(nonAdmins.some((actor) => canEdit(actor, vp, ["tier4_manager"]))).toBe(false);
 
-    // ...while the AI-lead alignment, which does exist, still does.
-    const roles: EditRole[] = ["tier4_manager", "aligned_ai_lead"];
-    const aiLead = row(vp.aligned_ai_lead_id!);
-    expect(aiLead.is_admin).toBe(false);
-    expect(canEdit(aiLead, vp, roles)).toBe(true);
+    // ...while on a chain that runs out one level lower, the roles that DO
+    // resolve still grant. A senior manager has no tier-4 above them (their
+    // tier-3 is the CEO), and their tier-2 is a VP who is not an admin.
+    const roles: EditRole[] = ["tier4_manager", "tier2_manager"];
+    const partial = nonAdmins.find(
+      (employee) =>
+        employee.tier4_manager_id === null &&
+        employee.tier2_manager_id !== null &&
+        !row(employee.tier2_manager_id).is_admin,
+    );
+    expect(partial, "seed 42 has a target with a partial chain").toBeDefined();
+
+    const holder = row(partial!.tier2_manager_id!);
+    expect(holder.is_admin).toBe(false);
+    expect(canEdit(holder, partial!, roles)).toBe(true);
+    expect(canEdit(holder, partial!, ["tier4_manager"])).toBe(false);
   });
 
   it("never lets a null column match a null-ish actor id", () => {
@@ -210,7 +248,7 @@ describe("null hierarchy columns are skipped, not matched", () => {
 });
 
 describe("visibleEmployees", () => {
-  it("gives an admin the whole organisation", () => {
+  it("gives an admin the whole organization", () => {
     const [total] = db.select({ value: count() }).from(employees).all();
     expect(total?.value).toBe(250);
     expect(visibleEmployees(db, row(FIXTURE.admin.id)).length).toBe(250);
@@ -284,9 +322,10 @@ describe("editorIdsOf", () => {
     expect(editorIdsOf(ic, DEFAULT_ROLES)).toEqual([
       FIXTURE.tier3ManagerOfIc.id,
       FIXTURE.tier4ManagerOfIc.id,
-      FIXTURE.aiLeadOfIc.id,
     ]);
     expect(editorIdsOf(ic, DEFAULT_ROLES)).not.toContain(FIXTURE.admin.id);
+    // The HRIS AI lead is on the row and is no longer an editor (§Phase 9).
+    expect(editorIdsOf(ic, DEFAULT_ROLES)).not.toContain(FIXTURE.aiLeadOfIc.id);
   });
 
   it("skips null columns", () => {
@@ -297,6 +336,215 @@ describe("editorIdsOf", () => {
     const ic = row(FIXTURE.ic.id);
     for (const id of editorIdsOf(ic, DEFAULT_ROLES)) {
       expect(canEdit(row(id), ic, DEFAULT_ROLES)).toBe(true);
+    }
+  });
+});
+
+/**
+ * §Phase 9. An AI lead's authority is a delegation from one or more LEADERS,
+ * resolved once into `[actor.id, ...leaders]` and compared against the target's
+ * role columns. The fixtures are chosen so that nothing here can pass on a
+ * relationship that already existed: `delegatedLead` holds no tier-2/3/4 slot
+ * over anybody, so without an assignment their whole world is themselves.
+ */
+describe("AI-lead delegation", () => {
+  const L = () => row(FIXTURE.delegatedLead.id);
+  const M = () => row(FIXTURE.delegationLeader.id);
+
+  /** Everyone `M`'s configured roles reach — the set `L` should inherit. */
+  const reportsOfLeader = (): string[] =>
+    db
+      .select()
+      .from(employees)
+      .all()
+      .filter(
+        (employee) =>
+          employee.tier3_manager_id === FIXTURE.delegationLeader.id ||
+          employee.tier4_manager_id === FIXTURE.delegationLeader.id,
+      )
+      .map((employee) => employee.id);
+
+  it("starts from nothing: an unassigned lead sees only themselves", () => {
+    expect(authorityIdsOf(db, L())).toEqual([FIXTURE.delegatedLead.id]);
+    expect(visibleEmployees(db, L(), DEFAULT_ROLES).map((e) => e.id)).toEqual([
+      FIXTURE.delegatedLead.id,
+    ]);
+    expect(canEdit(L(), row(FIXTURE.delegatedReport.id), DEFAULT_ROLES)).toBe(false);
+  });
+
+  it("resolves the authority set to the actor plus their leaders", () => {
+    assign(FIXTURE.delegatedLead.id, FIXTURE.delegationLeader.id);
+
+    expect(authorityIdsOf(db, L()).sort()).toEqual(
+      [FIXTURE.delegatedLead.id, FIXTURE.delegationLeader.id].sort(),
+    );
+    // Nobody else's authority moves.
+    expect(authorityIdsOf(db, M())).toEqual([FIXTURE.delegationLeader.id]);
+  });
+
+  // Criterion 3.
+  it("gives the lead exactly the leader's people, plus themselves, and NOT the leader", () => {
+    assign(FIXTURE.delegatedLead.id, FIXTURE.delegationLeader.id);
+
+    const expected = [...new Set([FIXTURE.delegatedLead.id, ...reportsOfLeader()])].sort();
+    const visible = visibleEmployees(db, L(), DEFAULT_ROLES).map((e) => e.id);
+
+    expect(visible.length).toBeGreaterThan(1);
+    expect([...visible].sort()).toEqual(expected);
+    expect(visible).toContain(FIXTURE.delegatedReport.id);
+    expect(visible).not.toContain(FIXTURE.delegationLeader.id);
+  });
+
+  // Criterion 4 — and the reason the self clause stays bound to the actor.
+  it("does not let the lead edit or view the leader they were assigned to", () => {
+    assign(FIXTURE.delegatedLead.id, FIXTURE.delegationLeader.id);
+    const authority = authorityIdsOf(db, L());
+
+    expect(canEdit(L(), M(), DEFAULT_ROLES, authority)).toBe(false);
+    expect(canView(L(), M(), DEFAULT_ROLES, authority)).toBe(false);
+    // ...while the leader's reports are fully theirs.
+    expect(canEdit(L(), row(FIXTURE.delegatedReport.id), DEFAULT_ROLES, authority)).toBe(true);
+  });
+
+  it("carries the same answer into the request queue", () => {
+    assign(FIXTURE.delegatedLead.id, FIXTURE.delegationLeader.id);
+    const authority = authorityIdsOf(db, L());
+
+    expect(
+      canActOnRequest(L(), row(FIXTURE.delegatedReport.id), DEFAULT_ROLES, authority),
+    ).toBe(true);
+    expect(canActOnRequest(L(), M(), DEFAULT_ROLES, authority)).toBe(false);
+    // A requester with no employee record stays admin-only, delegation or not.
+    expect(canActOnRequest(L(), null, DEFAULT_ROLES, authority)).toBe(false);
+  });
+
+  it("never grants admin rights, whoever is delegated", () => {
+    assign(FIXTURE.delegatedLead.id, FIXTURE.delegationLeader.id);
+    const authority = authorityIdsOf(db, L());
+
+    // The CEO is outside the leader's scope, and no delegation reaches them.
+    expect(canView(L(), row(FIXTURE.ceo.id), DEFAULT_ROLES, authority)).toBe(false);
+    expect(visibleEmployees(db, L(), DEFAULT_ROLES).length).toBeLessThan(250);
+    expect(L().is_admin).toBe(false);
+  });
+
+  // Criterion 6.
+  it("is non-transitive: a leader's own delegations do not chain onward", () => {
+    assign(FIXTURE.delegatedLead.id, FIXTURE.delegationLeader.id);
+    // The leader is themselves a lead, assigned to a third leader.
+    assign(FIXTURE.delegationLeader.id, FIXTURE.tier3ManagerOfIc.id);
+
+    const authority = authorityIdsOf(db, L());
+    expect(authority).not.toContain(FIXTURE.tier3ManagerOfIc.id);
+
+    const visible = visibleEmployees(db, L(), DEFAULT_ROLES).map((e) => e.id);
+    const secondHop = db
+      .select()
+      .from(employees)
+      .all()
+      .filter((employee) => employee.tier3_manager_id === FIXTURE.tier3ManagerOfIc.id)
+      .map((employee) => employee.id);
+
+    expect(secondHop.length).toBeGreaterThan(0);
+    for (const id of secondHop) expect(visible).not.toContain(id);
+    expect(visible).not.toContain(FIXTURE.ic.id);
+  });
+
+  it("refuses a self-edit that delegation would otherwise have granted", () => {
+    // The most natural assignment there is: a lead embedded in the org they
+    // support, delegated to their OWN tier-3 manager. That must not hand them
+    // their own budget.
+    const ownManagerId = FIXTURE.delegatedLead.tier3_manager_id!;
+    expect(ownManagerId).not.toBeNull();
+    assign(FIXTURE.delegatedLead.id, ownManagerId);
+
+    const authority = authorityIdsOf(db, L());
+    expect(authority).toContain(ownManagerId);
+    expect(canEdit(L(), L(), DEFAULT_ROLES, authority)).toBe(false);
+    // They can still see themselves, and still edit their new peers.
+    expect(canView(L(), L(), DEFAULT_ROLES, authority)).toBe(true);
+    expect(visibleEmployees(db, L(), DEFAULT_ROLES).map((e) => e.id)).toContain(
+      FIXTURE.delegatedLead.id,
+    );
+  });
+
+  it("stays in step with canView over the whole roster", () => {
+    assign(FIXTURE.delegatedLead.id, FIXTURE.delegationLeader.id);
+
+    const actor = L();
+    const authority = authorityIdsOf(db, actor);
+    const all = db.select().from(employees).all();
+
+    const expected = all
+      .filter((target) => canView(actor, target, DEFAULT_ROLES, authority))
+      .map((e) => e.id)
+      .sort();
+    expect(visibleEmployees(db, actor, DEFAULT_ROLES, authority).map((e) => e.id).sort()).toEqual(
+      expected,
+    );
+  });
+});
+
+describe("delegatedEditorsOf", () => {
+  it("is empty until something is delegated", () => {
+    expect(delegatedEditorsOf(db, row(FIXTURE.delegatedReport.id), DEFAULT_ROLES)).toEqual([]);
+  });
+
+  // Criterion 9, first half.
+  it("names the lead, and says which leader they are speaking for", () => {
+    assign(FIXTURE.delegatedLead.id, FIXTURE.delegationLeader.id);
+
+    expect(delegatedEditorsOf(db, row(FIXTURE.delegatedReport.id), DEFAULT_ROLES)).toEqual([
+      { id: FIXTURE.delegatedLead.id, viaLeaderIds: [FIXTURE.delegationLeader.id] },
+    ]);
+    // Somebody outside the leader's scope is unaffected.
+    expect(delegatedEditorsOf(db, row(FIXTURE.ic.id), DEFAULT_ROLES)).toEqual([]);
+  });
+
+  it("does not name the target themselves", () => {
+    const ownManagerId = FIXTURE.delegatedLead.tier3_manager_id!;
+    assign(FIXTURE.delegatedLead.id, ownManagerId);
+
+    const lead = row(FIXTURE.delegatedLead.id);
+    expect(editorIdsOf(lead, DEFAULT_ROLES)).toContain(ownManagerId);
+    expect(delegatedEditorsOf(db, lead, DEFAULT_ROLES).map((editor) => editor.id)).not.toContain(
+      FIXTURE.delegatedLead.id,
+    );
+  });
+
+  /**
+   * Criterion 9, second half — the direction nothing asserted before.
+   *
+   * `editorIdsOf` is pure over the target's own columns, so a delegated lead
+   * could never appear in it however correct it looked. The card that tells a
+   * user who to ask would simply have left them out.
+   */
+  it("completes the editor list: everyone canEdit allows is named", () => {
+    assign(FIXTURE.delegatedLead.id, FIXTURE.delegationLeader.id);
+
+    const all = db.select().from(employees).all();
+    const targets = [
+      row(FIXTURE.delegatedReport.id),
+      row(FIXTURE.ic.id),
+      row(FIXTURE.ceo.id),
+      row(FIXTURE.unrelatedPeer.id),
+      row(FIXTURE.delegatedLead.id),
+    ];
+
+    for (const target of targets) {
+      const named = new Set([
+        ...editorIdsOf(target, DEFAULT_ROLES),
+        ...delegatedEditorsOf(db, target, DEFAULT_ROLES).map((editor) => editor.id),
+      ]);
+
+      for (const actor of all) {
+        if (actor.is_admin) continue; // Admins edit everyone and are listed nowhere.
+        const allowed = canEdit(actor, target, DEFAULT_ROLES, authorityIdsOf(db, actor));
+        expect(
+          allowed ? named.has(actor.id) : true,
+          `${actor.id} may edit ${target.id} but is not named as an editor`,
+        ).toBe(true);
+      }
     }
   });
 });

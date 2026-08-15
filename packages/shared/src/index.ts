@@ -8,6 +8,7 @@
  * - `schemas/analytics`    — Zod schemas + types for the cost report (§G5)
  * - `money`                — decimal minor-unit parsing, formatting, ratios (§G9)
  * - `cursor`               — opaque, parameter-bound pagination cursors (§G4)
+ * - `date`                 — UTC-safe, locale-free date rendering
  */
 
 export * from "./open-enum";
@@ -15,3 +16,4 @@ export * from "./schemas/spend-limits";
 export * from "./schemas/analytics";
 export * from "./money";
 export * from "./cursor";
+export * from "./date";

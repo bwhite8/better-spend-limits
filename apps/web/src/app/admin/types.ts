@@ -19,10 +19,23 @@ export interface AdminActionResult {
   issues?: CsvIssue[];
 }
 
+/**
+ * One AI lead's complete set of delegated leaders (§Phase 9).
+ *
+ * A whole-set replace, not an add or a remove: the form shows the full list and
+ * edits it as a whole, so a diff would need both sides to agree on a starting
+ * point neither can see.
+ */
+export interface AiLeadAssignmentInput {
+  lead_employee_id: string;
+  leader_employee_ids: string[];
+}
+
 /** The config editor's whole form, as the server expects to receive it. */
 export interface ConfigUpdateInput {
   edit_roles: string[];
   near_limit_threshold: number;
   suppress_notification_default: boolean;
   sync_stale_after_minutes: number;
+  show_org_wide_kpis: boolean;
 }

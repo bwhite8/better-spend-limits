@@ -13,6 +13,8 @@
  * seat granted before the new joiner reached the export.
  */
 
+import { formatDate } from "@bsl/shared";
+
 import type { AppDatabase } from "@/db/client";
 import { spendLimitSnapshot, type SpendLimitSnapshotRow } from "@/db/schema";
 import { Money, SpendBar } from "@/components/money";
@@ -53,7 +55,7 @@ export function UnmatchedMembers({ rows, syncedAt }: UnmatchedMembersProps) {
   if (rows.length === 0) {
     return (
       <p data-testid="unmatched-empty" className="text-sm text-slate-500">
-        Every member the API reports is on the employee roster.
+        Every user the API reports is on the employee roster.
       </p>
     );
   }
@@ -64,13 +66,13 @@ export function UnmatchedMembers({ rows, syncedAt }: UnmatchedMembersProps) {
     <div className="flex flex-col gap-3">
       <p data-testid="unmatched-count" className="text-sm">
         <span className="font-medium">{rows.length}</span>{" "}
-        {rows.length === 1 ? "member has" : "members have"} no employee record, so nobody can see or
+        {rows.length === 1 ? "user has" : "users have"} no employee record, so nobody can see or
         edit them here. Add them to the next roster import — matching is by email address.
         <span className="block text-xs text-slate-500">
           {rows.length > shown.length ? `Showing the first ${shown.length}. ` : ""}
           {syncedAt === null
             ? "The snapshot has not been synced yet."
-            : `From the snapshot synced ${syncedAt.slice(0, 10)}.`}
+            : `From the snapshot synced ${formatDate(syncedAt)}.`}
         </span>
       </p>
 

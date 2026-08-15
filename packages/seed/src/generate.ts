@@ -32,7 +32,7 @@
  * Pass `options.now` to pin it outright.
  */
 
-import { parseMinorUnits } from "@bsl/shared";
+import { compareMinorUnits, isZeroMinorUnits, parseMinorUnits, sumMinorUnits } from "@bsl/shared";
 
 import { resolveEffectiveLimit } from "./effective";
 import { EMAIL_DOMAIN, FIRST_NAMES, LAST_NAMES } from "./names";
@@ -72,6 +72,8 @@ const USER_OVERRIDE_COUNT = 15;
 const RBAC_MEMBER_COUNT = 40;
 const NEAR_LIMIT_COHORT = 10;
 const WOW_SPIKE_COHORT = 12;
+/** Exactly this many members finish the month to date OVER their cap (§Phase 5). */
+const OVER_LIMIT_COHORT = 2;
 const PENDING_REQUEST_COUNT = 6;
 const APPROVED_REQUEST_COUNT = 4;
 const DENIED_REQUEST_COUNT = 2;
@@ -459,9 +461,10 @@ export function generateOrg(seed: number = DEFAULT_SEED, options: GenerateOrgOpt
     costsByEmployee.set(employee.id, series);
   }
 
-  // Two engineered cohorts, disjoint so neither disturbs the other:
+  // Three engineered cohorts, disjoint so none disturbs the others:
   //   * near-limit — month-to-date spend driven to 82–96% of the effective cap
   //   * week-over-week movers — last 7 days at ~4x the 7 days before them
+  //   * over-limit — exactly two members finish the month to date above their cap
   const shuffledEmployees = rng.shuffle(employees);
   const nearLimitCohort: { employee: SyntheticEmployee; limitCents: bigint }[] = [];
   for (const employee of shuffledEmployees) {
@@ -479,21 +482,29 @@ export function generateOrg(seed: number = DEFAULT_SEED, options: GenerateOrgOpt
 
   const monthPrefix = generatedAt.slice(0, 7);
   const currentMonthDates = dates.filter((date) => date.startsWith(monthPrefix));
-  for (const { employee, limitCents } of nearLimitCohort) {
-    const target = (limitCents * BigInt(82 + rng.int(0, 14))) / 100n;
+
+  /**
+   * Replace one series' month-to-date days with a weighted spread of `target`.
+   * The final day absorbs the rounding remainder and stays whole, so the
+   * month-to-date total is `target` plus at most a fraction of a cent per
+   * earlier day. Draw order is: weights, then one `renderAmount` per day.
+   */
+  const spreadOverMonth = (series: Map<string, string>, target: bigint): void => {
     const weights = currentMonthDates.map(() => BigInt(rng.int(70, 130)));
     const totalWeight = weights.reduce((sum, weight) => sum + weight, 0n);
-    const series = costsByEmployee.get(employee.id)!;
     let assigned = 0n;
     currentMonthDates.forEach((date, index) => {
       const last = index === currentMonthDates.length - 1;
       const value = last ? target - assigned : (target * weights[index]!) / totalWeight;
       assigned += value;
-      // The final day absorbs the rounding remainder and stays whole, so the
-      // month-to-date total is at least `target` exactly.
       if (value > 0n) series.set(date, renderAmount(rng, value, last ? 0 : 0.3));
       else series.delete(date);
     });
+  };
+
+  for (const { employee, limitCents } of nearLimitCohort) {
+    const series = costsByEmployee.get(employee.id)!;
+    spreadOverMonth(series, (limitCents * BigInt(82 + rng.int(0, 14))) / 100n);
   }
 
   const priorWeek = dates.slice(-14, -7);
@@ -508,6 +519,77 @@ export function generateOrg(seed: number = DEFAULT_SEED, options: GenerateOrgOpt
       // 3.8x–4.6x the baseline: comfortably past the 3x the reports look for,
       // even when the prior week lands at the top of its jitter band.
       series.set(date, renderAmount(rng, (base * BigInt(rng.int(380, 460))) / 100n, 0.3));
+    }
+  }
+
+  /* --- the over-limit pair, and the clamp that keeps it a pair ---------- */
+
+  // How many people are naturally over their cap is a function of how far into
+  // the month the generator runs — month-to-date spend accumulates while the
+  // limit stays fixed — so on seed 42 it is 0 on the 1st and 12 by the 28th.
+  // Pinning it at 2 therefore takes two operations: engineer a pair (below),
+  // and clamp everyone else back under their cap (after that). Both draw AFTER
+  // the two cohorts above, so per §rng.ts they perturb no earlier value.
+  const wowIds = new Set(wowCohort.map((employee) => employee.id));
+  const overLimitCohort: { employee: SyntheticEmployee; limitCents: bigint }[] = [];
+  for (const employee of shuffledEmployees) {
+    if (overLimitCohort.length >= OVER_LIMIT_COHORT) break;
+    if (nearLimitIds.has(employee.id) || wowIds.has(employee.id)) continue;
+    const effective = resolveEffectiveLimit(org, employee.id);
+    // §G9's two override subjects are excluded: `null` is unlimited (nothing to
+    // exceed) and `"0"` is the at-cap member, whose own UI path this must not
+    // take over. Both fail the tests below anyway; the intent is worth stating.
+    if (effective.amount === null || isZeroMinorUnits(effective.amount)) continue;
+    const { cents } = parseMinorUnits(effective.amount);
+    if (cents < 1000n) continue;
+    overLimitCohort.push({ employee, limitCents: cents });
+  }
+  if (overLimitCohort.length < OVER_LIMIT_COHORT) {
+    throw new Error("seed: not enough capped employees left for the over-limit cohort");
+  }
+  const overLimitIds = new Set(overLimitCohort.map((entry) => entry.employee.id));
+  for (const { employee, limitCents } of overLimitCohort) {
+    const series = costsByEmployee.get(employee.id)!;
+    spreadOverMonth(series, (limitCents * BigInt(105 + rng.int(0, 25))) / 100n);
+  }
+
+  // Everyone else is scaled back to 55–85% of their cap. The near-limit cohort
+  // sits at 82–96% by construction, so it never trips this and is never
+  // rescaled; the unlimited and zero-cap overrides are skipped outright.
+  const currentMonthSet = new Set(currentMonthDates);
+  const priorWeekOutsideMonth = priorWeek.filter((date) => !currentMonthSet.has(date));
+  for (const employee of employees) {
+    if (overLimitIds.has(employee.id)) continue;
+    const effective = resolveEffectiveLimit(org, employee.id);
+    if (effective.amount === null || isZeroMinorUnits(effective.amount)) continue;
+    const series = costsByEmployee.get(employee.id)!;
+    const monthToDate = sumMinorUnits(currentMonthDates.map((date) => series.get(date)));
+    if (compareMinorUnits(monthToDate, effective.amount) <= 0) continue;
+
+    const { cents: limitCents } = parseMinorUnits(effective.amount);
+    const target = (limitCents * BigInt(55 + rng.int(0, 30))) / 100n;
+    // Scaling is integer-exact on whole cents; `renderAmount` re-draws the
+    // sub-cent tail. Flooring every day keeps the new total at or under target.
+    let currentCents = 0n;
+    for (const date of currentMonthDates) {
+      const amount = series.get(date);
+      if (amount !== undefined) currentCents += parseMinorUnits(amount).cents;
+    }
+    if (currentCents === 0n) continue;
+    // A week-over-week mover's prior week straddles the month boundary, so
+    // scaling only the current month would shrink one window and not the other
+    // and could drop them under the 3x the reports look for. The days outside
+    // the month do not count towards month-to-date, so scaling both windows by
+    // the identical factor leaves the ratio intact and the clamp unaffected.
+    const scaled = wowIds.has(employee.id)
+      ? [...currentMonthDates, ...priorWeekOutsideMonth]
+      : currentMonthDates;
+    for (const date of scaled) {
+      const amount = series.get(date);
+      if (amount === undefined) continue;
+      const value = (parseMinorUnits(amount).cents * target) / currentCents;
+      if (value > 0n) series.set(date, renderAmount(rng, value, 0.3));
+      else series.delete(date);
     }
   }
 

@@ -16,6 +16,9 @@
  *   are four DISTINCT people, none of them an admin, so "tier 3 can edit but
  *   tier 1 cannot" tests the configured role and not admin rights.
  * - `unrelatedPeer` can edit nobody and view nobody but themselves.
+ * - `delegatedLead`, `delegationLeader` and `delegatedReport` are three more
+ *   distinct people, none of them any of the above, so a §Phase 9 delegation
+ *   test cannot pass on a relationship that was already there.
  */
 
 import { DEFAULT_SEED, generateOrg } from "./generate";
@@ -41,8 +44,28 @@ export interface SeedFixtures {
   tier3ManagerOfIc: SyntheticEmployee;
   /** `ic`'s tier-4 manager (a VP). Can edit `ic`; deliberately not an admin. */
   tier4ManagerOfIc: SyntheticEmployee;
-  /** `ic`'s aligned AI lead. Can edit `ic`; deliberately not an admin. */
+  /**
+   * `ic`'s aligned AI lead, per the HRIS column.
+   *
+   * Grants NOTHING since §Phase 9 removed `aligned_ai_lead` from the editable
+   * roles: the column is data, and authority comes from an explicit delegation
+   * instead. Kept because the column is still real and still rendered.
+   */
   aiLeadOfIc: SyntheticEmployee;
+  /**
+   * An AI lead with no hierarchy scope of their own — nobody has them as a
+   * tier-2/3/4 manager — so everything they can reach came from a delegation.
+   * Not an admin, and not `delegationLeader`.
+   */
+  delegatedLead: SyntheticEmployee;
+  /**
+   * A non-admin tier-3 leader with at least two reports, for delegating to
+   * `delegatedLead`. Deliberately none of the `*OfIc` fixtures, so a delegation
+   * test cannot pass by accident on somebody else's relationship.
+   */
+  delegationLeader: SyntheticEmployee;
+  /** Someone whose tier-3 manager is `delegationLeader`, and who is not the lead. */
+  delegatedReport: SyntheticEmployee;
   /** An IC in a different VP org who can edit nobody and view only themselves. */
   unrelatedPeer: SyntheticEmployee;
   /** An admin who is not the CEO — the "IT platform owner" persona. */
@@ -150,6 +173,54 @@ function computeFixtures(org: SyntheticOrg): SeedFixtures {
   const ceo = org.employees.find((employee) => employee.role === "ceo");
   if (!ceo) throw new Error("seed fixtures: no CEO");
 
+  // §Phase 9 delegation. Chosen so the assignment is the ONLY thing that can
+  // explain the lead's reach: the leader is nobody else's fixture, and the lead
+  // holds no tier-2/3/4 slot, so without the assignment their visible set is
+  // exactly themselves.
+  const byIdOrder = org.employees.slice().sort((a, b) => (a.id < b.id ? -1 : 1));
+  const reportsOf = (leaderId: string): SyntheticEmployee[] =>
+    byIdOrder.filter((employee) => employee.tier3_manager_id === leaderId);
+
+  const reservedIds = new Set([
+    ic.id,
+    directManagerOfIc.id,
+    tier3ManagerOfIc.id,
+    tier4ManagerOfIc.id,
+    aiLeadOfIc.id,
+    unrelatedPeer.id,
+    outsideTier3Scope.id,
+    admin.id,
+    ceo.id,
+  ]);
+
+  const delegationLeader = byIdOrder.find(
+    (employee) =>
+      !employee.is_admin && !reservedIds.has(employee.id) && reportsOf(employee.id).length >= 2,
+  );
+  if (!delegationLeader) throw new Error("seed fixtures: no spare non-admin tier-3 leader");
+
+  const holdsNoTierSlot = (id: string): boolean =>
+    !org.employees.some(
+      (employee) =>
+        employee.tier2_manager_id === id ||
+        employee.tier3_manager_id === id ||
+        employee.tier4_manager_id === id,
+    );
+
+  const delegatedLead = byIdOrder.find(
+    (employee) =>
+      !employee.is_admin &&
+      employee.id !== delegationLeader.id &&
+      aiLeadIds.has(employee.id) &&
+      holdsNoTierSlot(employee.id),
+  );
+  if (!delegatedLead) throw new Error("seed fixtures: no AI lead without a hierarchy slot");
+
+  const delegatedReport = reportsOf(delegationLeader.id).find(
+    (employee) => employee.id !== delegatedLead.id,
+  );
+  if (!delegatedReport) throw new Error("seed fixtures: the delegation leader has no report");
+
   const overrideFor = (predicate: (amount: string | null) => boolean, label: string) => {
     const override = org.userOverrides.find((entry) => predicate(entry.amount));
     if (!override) throw new Error(`seed fixtures: no ${label} override`);
@@ -181,6 +252,9 @@ function computeFixtures(org: SyntheticOrg): SeedFixtures {
     tier3ManagerOfIc,
     tier4ManagerOfIc,
     aiLeadOfIc,
+    delegatedLead,
+    delegationLeader,
+    delegatedReport,
     unrelatedPeer,
     admin,
     ceo,

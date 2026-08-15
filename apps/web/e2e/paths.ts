@@ -6,7 +6,7 @@
  * developer's shell OVERRIDES `apps/web/.env.development` (Next gives real
  * environment variables precedence over env files), and it has already happened
  * on this project: `npm run dev` silently pointed at `https://api.anthropic.com`.
- * Under test that would mean writes landing on a real organisation. Passing all
+ * Under test that would mean writes landing on a real organization. Passing all
  * three API variables explicitly through `webServer.env` beats the ambient
  * value, so the suite can only ever talk to the local mock.
  */

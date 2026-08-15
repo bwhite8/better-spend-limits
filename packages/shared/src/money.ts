@@ -126,24 +126,47 @@ export function minorUnitsToNumber(amount: string): number {
   return Number(fraction === "" ? cents.toString() : `${cents}.${fraction}`);
 }
 
+export interface FormatMoneyOptions {
+  /**
+   * Drop the `.00` from an amount that lands exactly on a whole major unit, so
+   * a column of round caps reads `$500` instead of `$500.00`.
+   *
+   * This is a DENSITY choice for list views, not a rounding one: the trim is
+   * applied after the half-up rounding, and only when the trimmed digits were
+   * both zero. `"1234"` still renders `"$12.34"`. Anywhere a reader might be
+   * checking a figure to the cent — the member page, the edit dialogs, the
+   * audit log — leave it off.
+   */
+  trimWholeDollars?: boolean;
+}
+
 /**
  * Render an amount for display: `"50000"` → `"$500.00"`, `null` → `"Unlimited"`.
  * Fractional cents are rounded half-up to the nearest cent. Thousands are comma
  * grouped (`"150000"` → `"$1,500.00"`). Unknown currency codes render as
  * `"XYZ 500.00"`.
+ *
+ * See {@link FormatMoneyOptions.trimWholeDollars} for the one shape that omits
+ * the cents.
  */
-export function formatMoney(amount: string | null, currency = "USD"): string {
+export function formatMoney(
+  amount: string | null,
+  currency = "USD",
+  options: FormatMoneyOptions = {},
+): string {
   if (amount === null || amount === undefined) return UNLIMITED_LABEL;
   const { cents, fraction } = parseMinorUnits(amount);
   // Fraction digits compare positionally, so a plain string compare against "5"
   // is an exact "is this at least half a cent?" test.
   const rounded = fraction !== "" && fraction >= "5" ? cents + 1n : cents;
   const major = groupDigits((rounded / 100n).toString());
-  const minor = (rounded % 100n).toString().padStart(2, "0");
+  const minorUnits = rounded % 100n;
+  const body =
+    options.trimWholeDollars === true && minorUnits === 0n
+      ? major
+      : `${major}.${minorUnits.toString().padStart(2, "0")}`;
   const symbol = CURRENCY_SYMBOLS[currency.toUpperCase()];
-  return symbol === undefined
-    ? `${currency.toUpperCase()} ${major}.${minor}`
-    : `${symbol}${major}.${minor}`;
+  return symbol === undefined ? `${currency.toUpperCase()} ${body}` : `${symbol}${body}`;
 }
 
 /**

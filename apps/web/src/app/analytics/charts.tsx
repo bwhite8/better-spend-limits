@@ -19,7 +19,7 @@
 
 import Link from "next/link";
 
-import { formatMoney, minorUnitsToNumber } from "@bsl/shared";
+import { formatDate, formatMoney, minorUnitsToNumber } from "@bsl/shared";
 import {
   CartesianGrid,
   Line,
@@ -76,7 +76,7 @@ function ChartTooltip({ active, payload }: TooltipContentProps<TooltipValueType,
 
   return (
     <div className="rounded border border-slate-200 bg-white px-2 py-1 text-xs shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <p className="font-medium">{datum.date}</p>
+      <p className="font-medium">{formatDate(datum.date)}</p>
       <p className="tabular-nums">{formatMoney(datum.amount)}</p>
       {datum.settled === null ? <p className="text-amber-600">provisional</p> : null}
     </div>
@@ -171,7 +171,7 @@ export function SpendOverTimeChart({ points, watermarkDate }: SpendOverTimeChart
         <span className="mr-1 inline-block h-0.5 w-4 align-middle bg-amber-500" />
         {watermarkDate === null
           ? "provisional tail — costs have not synced yet"
-          : `after ${watermarkDate} = provisional (still being revised, up to 30 days)`}
+          : `after ${formatDate(watermarkDate)} = provisional (still being revised, up to 30 days)`}
       </p>
     </div>
   );

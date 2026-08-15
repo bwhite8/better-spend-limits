@@ -15,7 +15,7 @@ import Database from "better-sqlite3";
 import { FIXTURE } from "@bsl/seed";
 import { expect, test, type Page } from "@playwright/test";
 
-import { loginAs } from "./helpers";
+import { findMemberRow, loginAs } from "./helpers";
 import { E2E_DATABASE_PATH } from "./paths";
 
 const LIMIT_API = `/api/members/${FIXTURE.ic.id}/limit`;
@@ -82,7 +82,7 @@ test.describe.serial("edit limit", () => {
     await expect(dialog).toBeVisible();
     // §G4: what they fall back to is only knowable after the delete, so the
     // confirmation names the ladder instead of guessing a number.
-    await expect(dialog).toContainText("group, seat-tier, or organisation default");
+    await expect(dialog).toContainText("group, seat-tier, or organization default");
     await dialog.getByTestId("remove-confirm").click();
 
     await expect(dialog).toBeHidden();
@@ -140,8 +140,8 @@ test.describe.serial("edit limit", () => {
   });
 
   test("the direct manager is excluded by the default config", async ({ page }) => {
-    // §G8 default `edit_roles` covers tiers 3 and 4 and the AI lead, so a tier-1
-    // manager can neither view the page nor drive the endpoint behind it.
+    // §G8 default `edit_roles` covers tiers 3 and 4, so a tier-1 manager can
+    // neither view the page nor drive the endpoint behind it.
     await loginAs(page, FIXTURE.directManagerOfIc.email);
     await page.goto(`/members/${FIXTURE.ic.id}`);
 
@@ -175,7 +175,9 @@ test.describe.serial("edit limit", () => {
   test("the members list reflects the restored inherited limit", async ({ page }) => {
     await loginAs(page, FIXTURE.admin.email);
 
-    const row = page.locator(`[data-testid="member-row"][data-employee-id="${FIXTURE.ic.id}"]`);
+    // Searched, not addressed by id alone: the list pages at 50 and this row
+    // has no reason to be on page 1.
+    const row = await findMemberRow(page, FIXTURE.ic.id, FIXTURE.ic.name);
     await expect(row.getByTestId("source-badge")).not.toHaveText("Override");
   });
 });

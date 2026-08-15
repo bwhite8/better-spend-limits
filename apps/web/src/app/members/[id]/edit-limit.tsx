@@ -171,7 +171,7 @@ export function EditLimit({
         </div>
       ) : (
         <p className="text-xs text-slate-500" data-testid="edit-unsynced">
-          This member has not been synced from the API yet, so their limit cannot be changed.
+          This user has not been synced from the API yet, so their limit cannot be changed.
         </p>
       )}
 
@@ -191,7 +191,7 @@ export function EditLimit({
           />
           <p className="text-xs text-slate-500">
             Monthly cap for {memberName}. There is no way to set &ldquo;unlimited&rdquo; directly —
-            remove the override instead, and they inherit their group, seat-tier or organisation
+            remove the override instead, and they inherit their group, seat-tier or organization
             limit (which may itself be unlimited).
           </p>
           <div className="flex items-center gap-2">
@@ -228,7 +228,7 @@ export function EditLimit({
           <h3 className="text-sm font-semibold">Remove override</h3>
           <p className="text-xs text-slate-600 dark:text-slate-400">
             {memberName}&rsquo;s override of <Money amount={amount} currency={currency} /> will be
-            deleted. They fall back to their group, seat-tier, or organisation default; if none
+            deleted. They fall back to their group, seat-tier, or organization default; if none
             exists, their limit becomes Unlimited.
           </p>
           <div className="flex items-center gap-2">

@@ -1,5 +1,6 @@
 /**
- * Analytics — four questions the local snapshot can answer (plan §Phase 12).
+ * Analytics — four questions the local snapshot can answer (plan §Phase 12),
+ * under a row of month-to-date headline figures.
  *
  *   1. Where is spend going over time, and how much of the recent tail is still
  *      being revised?
@@ -14,6 +15,13 @@
  * summarising people the viewer has no business seeing. A manager's "org spend"
  * is their team's spend, and the page says which it is showing.
  *
+ * The KPI cards are the ONE deliberate exception, and they are shaped so the
+ * exception stays small: a total and a headcount average over the whole roster,
+ * naming nobody, alongside the same two figures for the viewer's own scope so
+ * the comparison is the point rather than the disclosure. `show_org_wide_kpis`
+ * turns the organization pair off. An admin's scope already IS the organization,
+ * so they get one pair, labelled as such, rather than the same two numbers twice.
+ *
  * The freshness caveat is on the page rather than in a doc, because §G5 makes it
  * a property of the data itself: anything after `data_refreshed_at` is an
  * incomplete tail that may be revised for up to 30 days.
@@ -24,19 +32,22 @@ import Link from "next/link";
 import { getDb } from "@/db/client";
 import { Money, SpendBar } from "@/components/money";
 import {
+  allEmployeeIds,
   costWatermark,
   dailyTotals,
+  monthToDateTotal,
   nearLimit,
   topSpenders,
   trendWindowDays,
   wowMovers,
   DEFAULT_TREND_DAYS,
+  type MonthToDateSummary,
   type NearLimitRow,
   type WowMoverRow,
 } from "@/lib/analytics-queries";
 import { loadAppConfig } from "@/lib/config";
 import { currentEmployee } from "@/lib/identity";
-import { visibleEmployees } from "@/lib/permissions";
+import { authorityIdsOf, visibleEmployees } from "@/lib/permissions";
 import { ensureFreshSync } from "@/lib/sync-runner";
 
 import Forbidden from "../forbidden";
@@ -70,6 +81,64 @@ function Section({
   );
 }
 
+interface Kpi {
+  /** Distinguishes the four possible cards from one another in tests. */
+  testId: string;
+  label: string;
+  caption: string;
+  /** Decimal minor units. */
+  amount: string;
+}
+
+/**
+ * One headline figure.
+ *
+ * Cents are kept: unlike the users list, where a column of round caps is scanned
+ * rather than audited, these are sums somebody may well reconcile against the
+ * top-spender list further down the page.
+ */
+function KpiCard({ testId, label, caption, amount }: Kpi) {
+  return (
+    <div
+      data-testid="kpi-card"
+      className="flex flex-col gap-1 rounded-lg border border-slate-200 px-4 py-3 dark:border-slate-800"
+    >
+      <h2 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">{label}</h2>
+      <p data-testid={testId} className="text-xl font-semibold tabular-nums">
+        <Money amount={amount} />
+      </p>
+      <p className="text-xs text-slate-500">{caption}</p>
+    </div>
+  );
+}
+
+function monthToDateCaption(headcount: number): string {
+  return `Month to date, across ${headcount} ${headcount === 1 ? "user" : "users"}.`;
+}
+
+/** The month-to-date pair for one population. */
+function kpiPair(
+  prefix: "org" | "scope",
+  label: string,
+  summary: MonthToDateSummary,
+  caption: string,
+): Kpi[] {
+  return [
+    {
+      testId: `kpi-${prefix}-total`,
+      label: `${label} spend`,
+      caption,
+      amount: summary.total,
+    },
+    {
+      testId: `kpi-${prefix}-average`,
+      label: `${label} average`,
+      caption: "Per user, month to date. Nil spenders included.",
+      amount: summary.average,
+    },
+  ];
+}
+
 function MemberLink({
   employeeId,
   name,
@@ -96,7 +165,7 @@ function NearLimitTable({ rows }: { rows: NearLimitRow[] }) {
       <table data-testid="near-limit-table" className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-slate-200 text-left dark:border-slate-800">
-            {["Member", "Limit", "Period-to-date spend"].map((header) => (
+            {["User", "Limit", "Period-to-date spend"].map((header) => (
               <th key={header} scope="col" className="px-2 py-2 font-medium text-slate-500">
                 {header}
               </th>
@@ -145,7 +214,7 @@ function MoversTable({ rows }: { rows: WowMoverRow[] }) {
       <table data-testid="wow-table" className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-slate-200 text-left dark:border-slate-800">
-            {["Member", "Last 7 days", "Previous 7 days", "Change"].map((header) => (
+            {["User", "Last 7 days", "Previous 7 days", "Change"].map((header) => (
               <th key={header} scope="col" className="px-2 py-2 font-medium text-slate-500">
                 {header}
               </th>
@@ -188,7 +257,9 @@ export default async function AnalyticsPage() {
   await ensureFreshSync(db);
 
   const config = loadAppConfig(db);
-  const scope = visibleEmployees(db, actor, config.edit_roles).map((employee) => employee.id);
+  const scope = visibleEmployees(db, actor, config.edit_roles, authorityIdsOf(db, actor)).map(
+    (employee) => employee.id,
+  );
 
   const now = new Date();
   const watermark = costWatermark(db);
@@ -203,16 +274,47 @@ export default async function AnalyticsPage() {
 
   const thresholdPercent = Math.round(config.near_limit_threshold * 100);
 
+  // An admin's visible set is the whole roster, so their scope pair and an
+  // organization pair would be the same two numbers printed twice. They get one
+  // pair, named for what it actually covers.
+  const scopeSummary = monthToDateTotal(db, scope, { now });
+  const orgSummary =
+    actor.is_admin || !config.show_org_wide_kpis
+      ? null
+      : monthToDateTotal(db, allEmployeeIds(db), { now });
+
+  const kpis: Kpi[] = actor.is_admin
+    ? kpiPair("org", "Organization", scopeSummary, monthToDateCaption(scopeSummary.headcount))
+    : [
+        ...kpiPair("scope", "Your scope", scopeSummary, monthToDateCaption(scopeSummary.headcount)),
+        ...(orgSummary === null
+          ? []
+          : kpiPair("org", "Organization", orgSummary, monthToDateCaption(orgSummary.headcount))),
+      ];
+
   return (
     <section className="flex flex-col gap-10">
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
         <p data-testid="analytics-scope" className="text-sm text-slate-500">
           {actor.is_admin
-            ? `Organisation-wide, across all ${scope.length} members.`
+            ? `Organization-wide, across all ${scope.length} users.`
             : `Your scope: ${scope.length} ${scope.length === 1 ? "person" : "people"} you can view.`}
         </p>
       </header>
+
+      <div
+        data-testid="kpi-cards"
+        className={
+          kpis.length > 2
+            ? "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
+            : "grid grid-cols-1 gap-3 sm:grid-cols-2"
+        }
+      >
+        {kpis.map((kpi) => (
+          <KpiCard key={kpi.testId} {...kpi} />
+        ))}
+      </div>
 
       <Section
         title="Spend over time"
@@ -223,7 +325,7 @@ export default async function AnalyticsPage() {
 
       <Section
         title="Near limit"
-        caption={`Members at or above ${thresholdPercent}% of their effective cap. Members with no cap cannot be near one and are not listed.`}
+        caption={`Users at or above ${thresholdPercent}% of their effective cap. Users with no cap cannot be near one and are not listed.`}
       >
         {near.length === 0 ? (
           <p data-testid="near-limit-empty" className="text-sm text-slate-500">
@@ -236,7 +338,7 @@ export default async function AnalyticsPage() {
 
       <Section
         title="Week-over-week movers"
-        caption={`Members whose last 7 days cost at least ${WOW_MULTIPLE}× the 7 days before them.`}
+        caption={`Users whose last 7 days cost at least ${WOW_MULTIPLE}× the 7 days before them.`}
       >
         {movers.length === 0 ? (
           <p data-testid="wow-empty" className="text-sm text-slate-500">

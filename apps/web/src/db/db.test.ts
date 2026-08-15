@@ -9,6 +9,7 @@ import { runMigrations } from "./migrate";
 import { IN_MEMORY_DATABASE } from "./paths";
 import { seedDatabase } from "./seed";
 import {
+  aiLeadAssignments,
   appConfig,
   auditLog,
   employees,
@@ -35,27 +36,33 @@ function raw<T = Record<string, unknown>>(query: string): T[] {
 }
 
 describe("migrations", () => {
-  it("creates all seven §G7 tables", () => {
+  /**
+   * An EXACT set, not `arrayContaining`. A new table that nobody registered
+   * would have passed the containment form silently — and a table missing from
+   * the schema↔migration drift check below is never checked at all, so the two
+   * assertions have to fail together or neither is worth much.
+   */
+  it("creates exactly the eight application tables", () => {
     const tables = raw<{ name: string }>(
-      "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle%' ORDER BY name",
     ).map((row) => row.name);
 
-    expect(tables).toEqual(
-      expect.arrayContaining([
-        "app_config",
-        "audit_log",
-        "employees",
-        "increase_request_snapshot",
-        "spend_limit_snapshot",
-        "sync_state",
-        "user_daily_cost",
-      ]),
-    );
+    expect(tables).toEqual([
+      "ai_lead_assignments",
+      "app_config",
+      "audit_log",
+      "employees",
+      "increase_request_snapshot",
+      "spend_limit_snapshot",
+      "sync_state",
+      "user_daily_cost",
+    ]);
   });
 
   it("leaves every table empty and queryable", () => {
     for (const table of [
       employees,
+      aiLeadAssignments,
       appConfig,
       auditLog,
       spendLimitSnapshot,
@@ -81,6 +88,33 @@ describe("migrations", () => {
     expect(pk).toEqual(["user_id", "date"]);
   });
 
+  it("gives `ai_lead_assignments` a composite (lead, leader) primary key", () => {
+    const pk = raw<{ name: string; pk: number }>("PRAGMA table_info('ai_lead_assignments')")
+      .filter((column) => column.pk > 0)
+      .sort((a, b) => a.pk - b.pk)
+      .map((column) => column.name);
+
+    expect(pk).toEqual(["lead_employee_id", "leader_employee_id"]);
+  });
+
+  /**
+   * §Phase 9: deliberately NOT `ON DELETE CASCADE`. The roster import deletes
+   * every employee row before inserting the new file, so a cascade would wipe
+   * every delegation on every import without saying a word. The import prunes
+   * the genuinely orphaned rows itself and reports the count.
+   */
+  it("does not cascade `ai_lead_assignments` when an employee is deleted", () => {
+    const foreignKeys = raw<{ table: string; on_delete: string }>(
+      "PRAGMA foreign_key_list('ai_lead_assignments')",
+    );
+
+    expect(foreignKeys).toHaveLength(2);
+    for (const key of foreignKeys) {
+      expect(key.table).toBe("employees");
+      expect(key.on_delete).toBe("NO ACTION");
+    }
+  });
+
   it("defaults `sync_state.status` to 'idle'", () => {
     db.insert(syncState).values({ resource: "effective" }).run();
     const [row] = db.select().from(syncState).all();
@@ -94,6 +128,7 @@ describe("migrations", () => {
 describe("schema.ts matches the generated migration", () => {
   const tables = [
     employees,
+    aiLeadAssignments,
     appConfig,
     auditLog,
     spendLimitSnapshot,
@@ -153,10 +188,14 @@ describe("db:seed", () => {
     const rows = db.select().from(appConfig).all();
     const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
 
-    expect(values.edit_roles).toBe('["tier3_manager","tier4_manager","aligned_ai_lead"]');
+    // §Phase 9 retired `aligned_ai_lead`: an AI lead's authority is now an
+    // explicit delegation in `ai_lead_assignments`, not a column anybody can
+    // switch on.
+    expect(values.edit_roles).toBe('["tier3_manager","tier4_manager"]');
     expect(values.suppress_notification_default).toBe("true");
     expect(values.near_limit_threshold).toBe("0.8");
     expect(values.sync_stale_after_minutes).toBe("15");
+    expect(values.show_org_wide_kpis).toBe("true");
     expect(Object.keys(values).sort()).toEqual(Object.keys(APP_CONFIG_DEFAULTS).sort());
   });
 
@@ -228,6 +267,47 @@ describe("db:seed", () => {
 
     const [ic] = db.select().from(employees).where(eq(employees.id, FIXTURE.ic.id)).all();
     expect(ic?.name).toBe(FIXTURE.ic.name);
+  });
+
+  /**
+   * §Phase 9. Re-seeding restores the same 250 ids, so a delegation normally
+   * survives it untouched — but a re-seed ON TOP of an imported roster wipes ids
+   * the assignment table still points at, and the deferred foreign-key check
+   * would then abort the whole seed at COMMIT.
+   */
+  it("drops assignments whose people the re-seeded roster does not have", () => {
+    const stamp = "2026-08-14T00:00:00.000Z";
+    for (const id of ["emp_outsider_a", "emp_outsider_b"]) {
+      db.insert(employees)
+        .values({ id, name: id, email: `${id}@example.net`, created_at: stamp, updated_at: stamp })
+        .run();
+    }
+    db.insert(aiLeadAssignments)
+      .values({
+        lead_employee_id: "emp_outsider_a",
+        leader_employee_id: "emp_outsider_b",
+        created_at: stamp,
+      })
+      .run();
+
+    expect(() => seedDatabase(db)).not.toThrow();
+
+    expect(db.select().from(aiLeadAssignments).all()).toEqual([]);
+    expect(raw("PRAGMA foreign_key_check")).toEqual([]);
+  });
+
+  it("keeps an assignment whose people are still on the roster", () => {
+    db.insert(aiLeadAssignments)
+      .values({
+        lead_employee_id: FIXTURE.aiLeadOfIc.id,
+        leader_employee_id: FIXTURE.tier3ManagerOfIc.id,
+        created_at: "2026-08-14T00:00:00.000Z",
+      })
+      .run();
+
+    seedDatabase(db);
+
+    expect(db.select().from(aiLeadAssignments).all()).toHaveLength(1);
   });
 
   it("does not clobber an administrator's config changes on re-seed", () => {
@@ -369,6 +449,21 @@ describe("client", () => {
           direct_manager_id: "emp_nope",
           created_at: "2026-08-13T00:00:00.000Z",
           updated_at: "2026-08-13T00:00:00.000Z",
+        })
+        .run(),
+    ).toThrow(/FOREIGN KEY/i);
+  });
+
+  it("rejects an AI-lead assignment naming somebody who does not exist", () => {
+    seedDatabase(db);
+
+    expect(() =>
+      db
+        .insert(aiLeadAssignments)
+        .values({
+          lead_employee_id: FIXTURE.ic.id,
+          leader_employee_id: "emp_nope",
+          created_at: "2026-08-14T00:00:00.000Z",
         })
         .run(),
     ).toThrow(/FOREIGN KEY/i);

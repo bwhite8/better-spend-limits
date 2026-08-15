@@ -16,6 +16,7 @@ import { seedDatabase } from "@/db/seed";
 import {
   clearImpersonation,
   DEFAULT_AUTH_HEADER,
+  DEFAULT_DEV_EMAIL_VAR,
   findEmployeeByEmail,
   IMPERSONATION_COOKIE,
   normaliseEmail,
@@ -57,6 +58,15 @@ function cookieStore(values: Record<string, string>): CookiesLike {
 const DEV = { AUTH_MODE: "dev" };
 const PROXY = { AUTH_MODE: "proxy" };
 
+/**
+ * `emp_0030`, a `senior_manager` with `is_admin: true` in seed 42 — and
+ * deliberately NOT `FIXTURE.admin` (`emp_0016`), so a test that passes for the
+ * wrong reason shows up. Written as a literal because that is how it appears in
+ * `apps/web/.env.development` and `docker-compose.yml`.
+ */
+const DEV_DEFAULT_EMAIL = "theo.delacroix@example.com";
+const DEV_WITH_DEFAULT = { AUTH_MODE: "dev", [DEFAULT_DEV_EMAIL_VAR]: DEV_DEFAULT_EMAIL };
+
 describe("resolveAuthMode", () => {
   it("defaults to dev", () => {
     expect(resolveAuthMode({})).toBe("dev");
@@ -71,6 +81,24 @@ describe("resolveAuthMode", () => {
 
   it("throws on an unrecognised mode rather than guessing", () => {
     expect(() => resolveAuthMode({ AUTH_MODE: "prox" })).toThrow(/AUTH_MODE must be one of/);
+  });
+
+  it("rejects a dev fallback identity under proxy, naming both variables", () => {
+    const boom = () =>
+      resolveAuthMode({ AUTH_MODE: "proxy", [DEFAULT_DEV_EMAIL_VAR]: DEV_DEFAULT_EMAIL });
+
+    expect(boom).toThrow(/AUTH_MODE/);
+    expect(boom).toThrow(new RegExp(DEFAULT_DEV_EMAIL_VAR));
+  });
+
+  it("treats a blank dev fallback as unset, in either mode", () => {
+    expect(resolveAuthMode({ AUTH_MODE: "proxy", [DEFAULT_DEV_EMAIL_VAR]: "" })).toBe("proxy");
+    expect(resolveAuthMode({ AUTH_MODE: "proxy", [DEFAULT_DEV_EMAIL_VAR]: "   " })).toBe("proxy");
+  });
+
+  it("allows the dev fallback in dev mode", () => {
+    expect(resolveAuthMode(DEV_WITH_DEFAULT)).toBe("dev");
+    expect(resolveAuthMode({ [DEFAULT_DEV_EMAIL_VAR]: DEV_DEFAULT_EMAIL })).toBe("dev");
   });
 });
 
@@ -124,6 +152,17 @@ describe("resolveCurrentEmail — proxy mode", () => {
     expect(resolveCurrentEmail(headerStore({}), cookieStore({}), PROXY)).toBeNull();
     expect(resolveCurrentEmail(null, null, PROXY)).toBeNull();
   });
+
+  it("throws rather than falling back when a dev default is configured", () => {
+    // The whole point: a request whose SSO header went missing must NOT acquire
+    // an identity. Refusing at resolution time is what guarantees it.
+    expect(() =>
+      resolveCurrentEmail(headerStore({ [DEFAULT_AUTH_HEADER]: "" }), cookieStore({}), {
+        AUTH_MODE: "proxy",
+        [DEFAULT_DEV_EMAIL_VAR]: DEV_DEFAULT_EMAIL,
+      }),
+    ).toThrow(/AUTH_MODE[\s\S]*DEV_DEFAULT_EMAIL|DEV_DEFAULT_EMAIL[\s\S]*AUTH_MODE/);
+  });
 });
 
 describe("resolveCurrentEmail — dev mode", () => {
@@ -140,6 +179,55 @@ describe("resolveCurrentEmail — dev mode", () => {
   it("accepts a bare string cookie value too", () => {
     const cookies: CookiesLike = { get: () => "ic@example.com" };
     expect(resolveCurrentEmail(null, cookies, DEV)).toBe("ic@example.com");
+  });
+
+  it("is null with no cookie when no default is configured", () => {
+    expect(resolveCurrentEmail(headerStore({}), cookieStore({}), DEV)).toBeNull();
+    expect(resolveCurrentEmail(null, null, DEV)).toBeNull();
+  });
+});
+
+describe("resolveCurrentEmail — DEV_DEFAULT_EMAIL fallback", () => {
+  it("resolves to the configured default when no cookie is present", () => {
+    expect(resolveCurrentEmail(null, cookieStore({}), DEV_WITH_DEFAULT)).toBe(DEV_DEFAULT_EMAIL);
+    expect(resolveCurrentEmail(headerStore({}), null, DEV_WITH_DEFAULT)).toBe(DEV_DEFAULT_EMAIL);
+  });
+
+  it("normalises the configured default", () => {
+    expect(
+      resolveCurrentEmail(null, cookieStore({}), {
+        AUTH_MODE: "dev",
+        [DEFAULT_DEV_EMAIL_VAR]: "  Theo.Delacroix@EXAMPLE.com ",
+      }),
+    ).toBe(DEV_DEFAULT_EMAIL);
+  });
+
+  it("loses to a cookie that names somebody", () => {
+    const cookies = cookieStore({ [IMPERSONATION_COOKIE]: FIXTURE.ic.email });
+    expect(resolveCurrentEmail(null, cookies, DEV_WITH_DEFAULT)).toBe(FIXTURE.ic.email);
+  });
+
+  it("loses to a cookie that names NOBODY — the 403 stays reachable", () => {
+    const cookies = cookieStore({ [IMPERSONATION_COOKIE]: "nobody@example.com" });
+    expect(resolveCurrentEmail(null, cookies, DEV_WITH_DEFAULT)).toBe("nobody@example.com");
+  });
+
+  it("applies when the cookie is present but empty", () => {
+    const cookies = cookieStore({ [IMPERSONATION_COOKIE]: "   " });
+    expect(resolveCurrentEmail(null, cookies, DEV_WITH_DEFAULT)).toBe(DEV_DEFAULT_EMAIL);
+  });
+
+  it("is ignored in proxy mode — it throws instead", () => {
+    expect(() => resolveCurrentEmail(null, null, { ...DEV_WITH_DEFAULT, AUTH_MODE: "proxy" })).toThrow(
+      new RegExp(DEFAULT_DEV_EMAIL_VAR),
+    );
+  });
+
+  it("reads the default from process.env by default", () => {
+    vi.stubEnv("AUTH_MODE", "dev");
+    vi.stubEnv(DEFAULT_DEV_EMAIL_VAR, DEV_DEFAULT_EMAIL);
+
+    expect(resolveCurrentEmail(null, cookieStore({}))).toBe(DEV_DEFAULT_EMAIL);
   });
 });
 
@@ -175,6 +263,21 @@ describe("resolveCurrentEmployee", () => {
     const headers = headerStore({ [DEFAULT_AUTH_HEADER]: FIXTURE.ceo.email });
 
     expect(resolveCurrentEmployee(db, headers, cookieStore({}))?.id).toBe(FIXTURE.ceo.id);
+  });
+
+  it("resolves the dev default to a real seeded employee", () => {
+    const employee = resolveCurrentEmployee(db, null, cookieStore({}), DEV_WITH_DEFAULT);
+
+    expect(employee?.id).toBe("emp_0030");
+    expect(employee?.is_admin).toBe(true);
+    // Not FIXTURE.admin: the default identity is chosen independently, and a
+    // test that quietly tracked the fixture would stop proving that.
+    expect(employee?.id).not.toBe(FIXTURE.admin.id);
+  });
+
+  it("still returns null for a cookie naming nobody, default or not", () => {
+    const cookies = cookieStore({ [IMPERSONATION_COOKIE]: "nobody@example.com" });
+    expect(resolveCurrentEmployee(db, null, cookies, DEV_WITH_DEFAULT)).toBeNull();
   });
 });
 

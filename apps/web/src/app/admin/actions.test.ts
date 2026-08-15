@@ -29,12 +29,14 @@ vi.mock("next/headers", () => ({
 import { getDb } from "@/db/client";
 import { APP_CONFIG_DEFAULTS } from "@/db/config-defaults";
 import { runMigrations } from "@/db/migrate";
-import { appConfig, auditLog, employees } from "@/db/schema";
+import { aiLeadAssignments, appConfig, auditLog, employees } from "@/db/schema";
 import { seedDatabase } from "@/db/seed";
+import { aiLeadDirectory } from "@/lib/ai-leads";
 import { loadAppConfig } from "@/lib/config";
 import { EMPLOYEE_CSV_HEADER } from "@/lib/import-employees";
+import { authorityIdsOf, loadEditRoles, visibleEmployees } from "@/lib/permissions";
 
-import { importEmployees, updateConfig } from "./actions";
+import { importEmployees, updateAiLeadAssignments, updateConfig } from "./actions";
 import type { ConfigUpdateInput } from "./types";
 
 const db = getDb();
@@ -52,12 +54,20 @@ function formInput(overrides: Partial<ConfigUpdateInput> = {}): ConfigUpdateInpu
     near_limit_threshold: APP_CONFIG_DEFAULTS.near_limit_threshold,
     suppress_notification_default: APP_CONFIG_DEFAULTS.suppress_notification_default,
     sync_stale_after_minutes: APP_CONFIG_DEFAULTS.sync_stale_after_minutes,
+    show_org_wide_kpis: APP_CONFIG_DEFAULTS.show_org_wide_kpis,
     ...overrides,
   };
 }
 
 const auditRows = () => db.select().from(auditLog).all();
 const employeeCount = () => db.select().from(employees).all().length;
+const assignmentRows = () => db.select().from(aiLeadAssignments).all();
+
+/** The visible-set size the delegation tests measure movement against. */
+function scopeSizeOf(employeeId: string): number {
+  const actor = db.select().from(employees).all().find((row) => row.id === employeeId)!;
+  return visibleEmployees(db, actor, loadEditRoles(db), authorityIdsOf(db, actor)).length;
+}
 
 beforeAll(() => {
   runMigrations(db);
@@ -65,6 +75,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   db.delete(auditLog).run();
+  db.delete(aiLeadAssignments).run();
   db.delete(appConfig).run();
   seedDatabase(db);
   identity.email = FIXTURE.admin.email;
@@ -143,12 +154,145 @@ describe("updateConfig", () => {
     expect(auditRows()).toEqual([]);
   });
 
+  /**
+   * `updateConfig` persists `Object.entries(validated)`, so a key `validateConfig`
+   * forgets to return is never written and never audited — silently, with the
+   * form still showing the value the admin chose. Every §G7 key therefore has to
+   * survive a round trip through the action, not merely through the reader.
+   */
+  it("round-trips every §G7 key through the action, including show_org_wide_kpis", async () => {
+    const answer = await updateConfig(formInput({ show_org_wide_kpis: false }));
+
+    expect(answer.ok).toBe(true);
+    expect(loadAppConfig(db).show_org_wide_kpis).toBe(false);
+
+    const detail = JSON.parse(auditRows()[0].detail) as { changed: Record<string, unknown> };
+    expect(detail.changed.show_org_wide_kpis).toEqual({ from: true, to: false });
+
+    const stored = new Set(db.select().from(appConfig).all().map((row) => row.key));
+    for (const key of Object.keys(APP_CONFIG_DEFAULTS)) expect(stored).toContain(key);
+  });
+
   it("saves without complaint when nothing actually changed", async () => {
     const answer = await updateConfig(formInput());
 
     expect(answer.ok).toBe(true);
     expect(answer.message).toContain("nothing changed");
     expect(JSON.parse(auditRows()[0].detail)).toMatchObject({ changed: {} });
+  });
+});
+
+/** §Phase 9. The action is the only thing standing between a form and a grant. */
+describe("updateAiLeadAssignments", () => {
+  const LEAD = FIXTURE.delegatedLead.id;
+  const LEADER = FIXTURE.delegationLeader.id;
+
+  it("refuses a caller who is not an admin, and writes nothing", async () => {
+    identity.email = FIXTURE.tier3ManagerOfIc.email;
+
+    const answer = await updateAiLeadAssignments({
+      lead_employee_id: LEAD,
+      leader_employee_ids: [LEADER],
+    });
+
+    expect(answer.ok).toBe(false);
+    expect(assignmentRows()).toEqual([]);
+    expect(auditRows()).toEqual([]);
+  });
+
+  // Criterion 10.
+  it("stores the assignment and audits both employee ids", async () => {
+    const before = scopeSizeOf(LEAD);
+
+    const answer = await updateAiLeadAssignments({
+      lead_employee_id: LEAD,
+      leader_employee_ids: [LEADER],
+    });
+
+    expect(answer.ok).toBe(true);
+    expect(assignmentRows()).toMatchObject([
+      { lead_employee_id: LEAD, leader_employee_id: LEADER },
+    ]);
+    expect(scopeSizeOf(LEAD)).toBeGreaterThan(before);
+
+    const [entry] = auditRows();
+    expect(entry.action).toBe("assign_ai_lead");
+    expect(entry.actor_email).toBe(FIXTURE.admin.email.toLowerCase());
+    expect(entry.target_employee_id).toBe(LEAD);
+    expect(JSON.parse(entry.detail)).toMatchObject({
+      lead_employee_id: LEAD,
+      leader_employee_ids: [LEADER],
+      added: [LEADER],
+      removed: [],
+    });
+  });
+
+  // Criterion 5.
+  it("refuses an administrator as a leader, naming the constraint", async () => {
+    const before = scopeSizeOf(LEAD);
+
+    const answer = await updateAiLeadAssignments({
+      lead_employee_id: LEAD,
+      leader_employee_ids: [FIXTURE.admin.id],
+    });
+
+    expect(answer.ok).toBe(false);
+    expect(answer.message).toContain("administrator");
+    expect(answer.message).toContain("whole organization");
+    expect(assignmentRows()).toEqual([]);
+    expect(scopeSizeOf(LEAD)).toBe(before);
+    expect(auditRows()).toEqual([]);
+  });
+
+  it("refuses somebody who leads nobody, and refuses a self-assignment", async () => {
+    const nobody = await updateAiLeadAssignments({
+      lead_employee_id: LEAD,
+      leader_employee_ids: [FIXTURE.unrelatedPeer.id],
+    });
+    expect(nobody.ok).toBe(false);
+    expect(nobody.message).toContain("tier-2, tier-3 or tier-4");
+
+    const self = await updateAiLeadAssignments({
+      lead_employee_id: LEADER,
+      leader_employee_ids: [LEADER],
+    });
+    expect(self.ok).toBe(false);
+    expect(self.message).toContain("themselves");
+
+    expect(assignmentRows()).toEqual([]);
+  });
+
+  it("refuses an id that is on no roster row", async () => {
+    expect(
+      (await updateAiLeadAssignments({ lead_employee_id: "emp_nope", leader_employee_ids: [] })).ok,
+    ).toBe(false);
+    expect(
+      (await updateAiLeadAssignments({ lead_employee_id: LEAD, leader_employee_ids: ["emp_nope"] }))
+        .ok,
+    ).toBe(false);
+    expect(assignmentRows()).toEqual([]);
+  });
+
+  it("replaces the whole set, and an empty list removes the delegation", async () => {
+    const second = aiLeadDirectory(db).leaders.find((leader) => leader.id !== LEADER)!;
+
+    await updateAiLeadAssignments({ lead_employee_id: LEAD, leader_employee_ids: [LEADER] });
+    await updateAiLeadAssignments({ lead_employee_id: LEAD, leader_employee_ids: [second.id] });
+
+    expect(assignmentRows().map((row) => row.leader_employee_id)).toEqual([second.id]);
+    expect(JSON.parse(auditRows()[1].detail)).toMatchObject({
+      added: [second.id],
+      removed: [LEADER],
+    });
+
+    const cleared = await updateAiLeadAssignments({
+      lead_employee_id: LEAD,
+      leader_employee_ids: [],
+    });
+    expect(cleared.ok).toBe(true);
+    expect(cleared.message).toContain("removed");
+    expect(assignmentRows()).toEqual([]);
+    expect(scopeSizeOf(LEAD)).toBe(1);
   });
 });
 
@@ -166,7 +310,32 @@ describe("importEmployees", () => {
       imported: 2,
       replaced: 250,
       admins: 1,
+      delegationsRemoved: 0,
     });
+  });
+
+  /**
+   * §Phase 9 criterion 11. `employees` is deleted wholesale inside the import
+   * transaction, so a delegation naming somebody who is not on the new roster
+   * would fail the deferred foreign-key check at COMMIT and surface as "the
+   * roster could not be replaced". It is dropped instead — and said out loud,
+   * because it is a permission that just went away.
+   */
+  it("drops delegations whose people are no longer on the roster, and says so", async () => {
+    await updateAiLeadAssignments({
+      lead_employee_id: FIXTURE.delegatedLead.id,
+      leader_employee_ids: [FIXTURE.delegationLeader.id],
+    });
+    expect(assignmentRows()).toHaveLength(1);
+
+    const answer = await importEmployees(VALID_CSV);
+
+    expect(answer.ok).toBe(true);
+    expect(answer.message).toContain("Removed 1 AI-lead delegation");
+    expect(assignmentRows()).toEqual([]);
+
+    const entry = auditRows().find((row) => row.action === "import_employees")!;
+    expect(JSON.parse(entry.detail)).toMatchObject({ delegationsRemoved: 1 });
   });
 
   it("re-validates the file rather than trusting the browser's verdict", async () => {

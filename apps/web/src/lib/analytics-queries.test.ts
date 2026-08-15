@@ -31,10 +31,12 @@ import { seedDatabase } from "@/db/seed";
 import { employees, userDailyCost, type Employee } from "@/db/schema";
 import { AnthropicClient } from "@/lib/anthropic/client";
 import {
+  allEmployeeIds,
   costWatermark,
   dailyTotals,
   dateSeries,
   monthStart,
+  monthToDateTotal,
   nearLimit,
   resolveScope,
   shiftDays,
@@ -393,6 +395,87 @@ describe("analytics queries", () => {
       expect(rows.map((row) => row.employeeId)).toEqual(
         rows.length === 0 ? [] : [peer.id],
       );
+    });
+  });
+
+  /* ---------------------------------------------------------------------- */
+
+  // Phase 8: the headline cards. `monthToDateTotal` shares its window with
+  // `topSpenders`, so the card and the bar list underneath it must reconcile.
+  describe("monthToDateTotal", () => {
+    it("sums the month to date exactly, over the same window as topSpenders", () => {
+      const summary = monthToDateTotal(db, adminScope, { now: clock });
+      const from = monthStart(clock);
+      const to = toIsoDate(clock);
+      const userIds = new Set(resolveScope(db, adminScope).map((member) => member.userId));
+
+      const expected = sumMinorUnits(
+        db
+          .select()
+          .from(userDailyCost)
+          .all()
+          .filter((row) => row.date >= from && row.date <= to && userIds.has(row.user_id))
+          .map((row) => row.amount),
+      );
+
+      expect(summary.total).toBe(expected);
+      expect(summary.headcount).toBe(adminScope.length);
+      expect(minorUnitsToNumber(summary.average)).toBeCloseTo(
+        minorUnitsToNumber(summary.total) / adminScope.length,
+        4,
+      );
+
+      // The card is the sum the bar list is a top slice of.
+      const everySpender = topSpenders(db, adminScope, adminScope.length, { now: clock });
+      expect(sumMinorUnits(everySpender.map((row) => row.amount))).toBe(summary.total);
+    });
+
+    it("counts everybody in the set, including people with no spend at all", () => {
+      // A month the 90-day cost window cannot reach: every member is a nil
+      // spender, and the denominator is still the whole set. Dividing by "people
+      // with cost rows" would make this a 0/0.
+      const summary = monthToDateTotal(db, adminScope, { now: shiftDays(clock, 400) });
+
+      expect(summary.total).toBe("0");
+      expect(summary.headcount).toBe(adminScope.length);
+      expect(summary.average).toBe("0");
+    });
+
+    it("keeps a narrower scope strictly below the whole organization", () => {
+      const org = monthToDateTotal(db, allEmployeeIds(db), { now: clock });
+      const team = monthToDateTotal(db, tier3Scope, { now: clock });
+
+      expect(compareMinorUnits(team.total, org.total)).toBe(-1);
+      expect(minorUnitsToNumber(team.total)).toBeGreaterThan(0);
+      expect(org.headcount).toBe(250);
+      expect(team.headcount).toBe(tier3Scope.length);
+    });
+
+    it("returns zeros for an empty scope rather than the whole organization", () => {
+      expect(monthToDateTotal(db, [], { now: clock })).toEqual({
+        total: "0",
+        headcount: 0,
+        average: "0",
+      });
+    });
+
+    it("emits an average as a well-formed decimal, never exponent notation", () => {
+      for (const scope of [adminScope, tier3Scope, [peer.id]]) {
+        const { average } = monthToDateTotal(db, scope, { now: clock });
+        expect(average).toMatch(/^\d+(\.\d+)?$/);
+      }
+    });
+  });
+
+  describe("allEmployeeIds", () => {
+    it("returns the whole roster — the one deliberately unscoped accessor", () => {
+      const ids = allEmployeeIds(db);
+
+      expect(ids).toHaveLength(250);
+      expect(new Set(ids).size).toBe(250);
+      // An admin's visible set already is the organization, which is why the
+      // page gives them one pair of cards rather than two identical pairs.
+      expect(new Set(ids)).toEqual(new Set(adminScope));
     });
   });
 });

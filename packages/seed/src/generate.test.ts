@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { minorUnitsToNumber, sumMinorUnits } from "@bsl/shared";
+import { compareMinorUnits, isZeroMinorUnits, minorUnitsToNumber, sumMinorUnits } from "@bsl/shared";
 
 import { resolveEffectiveLimit } from "./effective";
 import { FIXTURE, getFixtureOrg } from "./fixtures";
@@ -51,6 +51,32 @@ function nearLimitEmployees(target: SyntheticOrg, threshold: number): string[] {
       return spend !== undefined && minorUnitsToNumber(spend) / limit >= threshold;
     })
     .map((employee) => employee.id);
+}
+
+/**
+ * Employees whose month-to-date spend has passed a POSITIVE, FINITE cap.
+ *
+ * Deliberately exact rather than the float ratio `nearLimitEmployees` uses: the
+ * §Phase 5 count is asserted as an equality, so a member sitting on their cap to
+ * the last fractional cent must land on the "not over" side of the line.
+ */
+function overLimitEmployees(target: SyntheticOrg): string[] {
+  const spendByEmployee = monthToDateSpend(target);
+  return target.employees
+    .filter((employee) => {
+      const effective = resolveEffectiveLimit(target, employee.id);
+      if (effective.amount === null || isZeroMinorUnits(effective.amount)) return false;
+      const spend = spendByEmployee.get(employee.id);
+      return spend !== undefined && compareMinorUnits(spend, effective.amount) > 0;
+    })
+    .map((employee) => employee.id);
+}
+
+/** The employee holding the one override matching `predicate`, chosen structurally. */
+function overrideHolder(target: SyntheticOrg, predicate: (amount: string | null) => boolean): string {
+  const override = target.userOverrides.find((entry) => predicate(entry.amount));
+  if (!override) throw new Error("test: no override matches the predicate");
+  return override.employeeId;
 }
 
 /** Employees whose last 7 days are ≥ `factor` × the 7 days before them. */
@@ -376,4 +402,59 @@ describe("daily costs (criteria 6 & 7)", () => {
     expect(weekOverWeekMovers(firstOfMonth, 3).length).toBeGreaterThanOrEqual(10);
     for (const cost of firstOfMonth.dailyCosts) expect(cost.amount).toMatch(AMOUNT_PATTERN);
   });
+});
+
+describe("the over-limit cohort (§Phase 5)", () => {
+  /**
+   * Month-to-date spend accumulates while the cap stays fixed, so the natural
+   * over-limit population is a function of the calendar: on seed 42 it was 0 on
+   * the 1st, 6 by the 14th and 12 by the 28th. Any single date would therefore
+   * pass by coincidence — these three pin the start, middle and end of a month.
+   */
+  const PINNED_DATES = ["2026-08-01", "2026-08-15", "2026-08-28"] as const;
+
+  const generated = new Map<string, SyntheticOrg>();
+  const orgOn = (date: string): SyntheticOrg => {
+    let target = generated.get(date);
+    if (!target) {
+      target = generateOrg(DEFAULT_SEED, { now: new Date(`${date}T09:15:00.000Z`) });
+      generated.set(date, target);
+    }
+    return target;
+  };
+
+  for (const date of PINNED_DATES) {
+    describe(`generated on ${date}`, () => {
+      it("puts exactly 2 members over a positive, finite cap", () => {
+        expect(overLimitEmployees(orgOn(date))).toHaveLength(2);
+      });
+
+      it("leaves the zero-cap member out of the count, still spending", () => {
+        // §G9's "at cap" UI path needs a subject with a `"0"` override AND real
+        // spend; the clamp must not have emptied their month.
+        const target = orgOn(date);
+        const zeroCap = overrideHolder(target, (amount) => amount === "0");
+        expect(overLimitEmployees(target)).not.toContain(zeroCap);
+        const spend = monthToDateSpend(target).get(zeroCap);
+        expect(spend).toBeDefined();
+        expect(compareMinorUnits(spend!, "0")).toBe(1);
+      });
+
+      it("leaves the unlimited member with cost rows and out of the count", () => {
+        const target = orgOn(date);
+        const unlimited = overrideHolder(target, (amount) => amount === null);
+        expect(target.dailyCosts.some((cost) => cost.employeeId === unlimited)).toBe(true);
+        expect(overLimitEmployees(target)).not.toContain(unlimited);
+      });
+
+      it("keeps the near-limit and week-over-week cohorts intact", () => {
+        // The clamp rescales current-month days and (for a mover) the prior week
+        // by the same factor; both engineered cohorts must survive it.
+        const target = orgOn(date);
+        expect(nearLimitEmployees(target, 0.8).length).toBeGreaterThanOrEqual(8);
+        expect(weekOverWeekMovers(target, 3).length).toBeGreaterThanOrEqual(10);
+        for (const cost of target.dailyCosts) expect(cost.amount).toMatch(AMOUNT_PATTERN);
+      });
+    });
+  }
 });

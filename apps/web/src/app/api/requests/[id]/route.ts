@@ -30,7 +30,7 @@ import { writeAudit, type AuditAction } from "@/lib/audit";
 import { loadAppConfig } from "@/lib/config";
 import { currentEmployee } from "@/lib/identity";
 import { LimitWriteError, refreshMemberSnapshot, requireWireAmount } from "@/lib/member-limit";
-import { canActOnRequest } from "@/lib/permissions";
+import { authorityIdsOf, canActOnRequest } from "@/lib/permissions";
 import { findRequest, PENDING_STATUS, upsertRequestSnapshot } from "@/lib/requests";
 
 export const dynamic = "force-dynamic";
@@ -63,7 +63,7 @@ async function resolveActContext(context: RouteContext): Promise<ActContext | Re
   }
 
   const { edit_roles } = loadAppConfig(db);
-  if (!canActOnRequest(actor, found.requester, edit_roles)) {
+  if (!canActOnRequest(actor, found.requester, edit_roles, authorityIdsOf(db, actor))) {
     return fail(403, "forbidden", "you are not allowed to act on this increase request");
   }
 

@@ -1,32 +1,33 @@
 "use server";
 
 /**
- * The two writes the admin area performs (plan §Phase 13).
+ * The three writes the admin area performs (plan §Phase 13, §Phase 9).
  *
- * Both are server actions rather than BFF routes — unlike Phases 10 and 11,
- * neither talks to the Anthropic API, so there is no upstream status code to
- * pass through and nothing a route handler would buy. What they do share with
- * those routes is the two non-negotiables: **the permission check happens here,
- * on the server, on every call**, and **every write leaves an `audit_log` row**
+ * All are server actions rather than BFF routes — unlike Phases 10 and 11, none
+ * talks to the Anthropic API, so there is no upstream status code to pass
+ * through and nothing a route handler would buy. What they do share with those
+ * routes is the two non-negotiables: **the permission check happens here, on
+ * the server, on every call**, and **every write leaves an `audit_log` row**
  * (§G8). A client that never renders the form can still call these functions.
  *
- * Neither action throws at its caller. A rejected config or an unreadable CSV is
- * an ordinary outcome of an admin screen, and an unhandled server-action
- * rejection would surface as a generic framework error with the actual reason
- * scrubbed out in production.
+ * No action throws at its caller. A rejected config, an unreadable CSV or an
+ * ineligible delegation is an ordinary outcome of an admin screen, and an
+ * unhandled server-action rejection would surface as a generic framework error
+ * with the actual reason scrubbed out in production.
  */
 
 import type { AppDatabase } from "@/db/client";
 import { getDb } from "@/db/client";
 import { EDIT_ROLE_VALUES, type AppConfigDefaults, type EditRole } from "@/db/config-defaults";
 import { appConfig, type Employee } from "@/db/schema";
+import { setAiLeadAssignments, validateAssignment } from "@/lib/ai-leads";
 import { writeAudit } from "@/lib/audit";
 import { loadAppConfig } from "@/lib/config";
 import { applyEmployeeImport, type ImportSummary } from "@/lib/employee-roster";
 import { currentEmployee } from "@/lib/identity";
 import { parseEmployeeCsv } from "@/lib/import-employees";
 
-import type { AdminActionResult, ConfigUpdateInput } from "./types";
+import type { AdminActionResult, AiLeadAssignmentInput, ConfigUpdateInput } from "./types";
 
 /** How many parse problems the UI is shown before it is just noise. */
 const MAX_REPORTED_ISSUES = 20;
@@ -35,6 +36,9 @@ const NOT_ADMIN: AdminActionResult = {
   ok: false,
   message: "Only administrators can change application settings.",
 };
+
+/** The label the assignment form uses for an empty list, so a removal reads as one. */
+const NOBODY = "nobody";
 
 /** The acting employee, or `null` when they are not an admin (or not anybody). */
 async function resolveAdmin(db: AppDatabase): Promise<Employee | null> {
@@ -80,6 +84,9 @@ function validateConfig(input: ConfigUpdateInput): AppConfigDefaults | string {
     near_limit_threshold: threshold,
     suppress_notification_default: input.suppress_notification_default === true,
     sync_stale_after_minutes: staleAfter,
+    // Every key this returns is persisted by `updateConfig`, and only the keys
+    // it returns are — a setting omitted here is silently never written.
+    show_org_wide_kpis: input.show_org_wide_kpis === true,
   };
 }
 
@@ -142,6 +149,60 @@ export async function updateConfig(input: ConfigUpdateInput): Promise<AdminActio
 }
 
 /* -------------------------------------------------------------------------- */
+/* AI-lead delegation                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Set which leaders an AI lead speaks for (§Phase 9).
+ *
+ * This is a **permission grant**, which is why it lives beside the config editor
+ * and leaves the same kind of audit trail: the assignment decides, from the next
+ * page view, whose limits that person may change. The form only ever offers
+ * eligible leaders, and `validateAssignment` re-derives eligibility here anyway
+ * — the option list is a convenience, the check is the rule.
+ *
+ * The refusal that matters most is an administrator: their scope is the whole
+ * organization, so delegating it would grant admin reach under a name that does
+ * not say so.
+ */
+export async function updateAiLeadAssignments(
+  input: AiLeadAssignmentInput,
+): Promise<AdminActionResult> {
+  const db = getDb();
+  const actor = await resolveAdmin(db);
+  if (actor === null) return NOT_ADMIN;
+
+  const validated = validateAssignment(db, input?.lead_employee_id, input?.leader_employee_ids);
+  if (!validated.ok) return { ok: false, message: validated.message };
+
+  const { added, removed } = setAiLeadAssignments(db, validated.leadId, validated.leaderIds);
+
+  writeAudit(db, {
+    actor: { id: actor.id, email: actor.email },
+    action: "assign_ai_lead",
+    targetEmployeeId: validated.leadId,
+    detail: {
+      outcome: "success",
+      lead_employee_id: validated.leadId,
+      leader_employee_ids: validated.leaderIds,
+      added,
+      removed,
+    },
+  });
+
+  const moved = added.length + removed.length;
+  if (moved === 0) return { ok: true, message: "Saved — nothing changed." };
+
+  return {
+    ok: true,
+    message:
+      validated.leaderIds.length === 0
+        ? `Delegation removed. This lead now speaks for ${NOBODY}.`
+        : `Saved. This lead now speaks for ${validated.leaderIds.length} leader${validated.leaderIds.length === 1 ? "" : "s"}.`,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
 /* Employee import                                                            */
 /* -------------------------------------------------------------------------- */
 
@@ -197,8 +258,13 @@ export async function importEmployees(csv: string): Promise<AdminActionResult> {
     detail: { outcome: "success", ...summary },
   });
 
+  const delegations =
+    summary.delegationsRemoved === 0
+      ? ""
+      : ` Removed ${summary.delegationsRemoved} AI-lead delegation${summary.delegationsRemoved === 1 ? "" : "s"} naming somebody who is no longer on the roster.`;
+
   return {
     ok: true,
-    message: `Imported ${summary.imported} employees, replacing ${summary.replaced}. ${summary.preserved} kept their matched Claude user id.`,
+    message: `Imported ${summary.imported} employees, replacing ${summary.replaced}. ${summary.preserved} kept their matched Claude user id.${delegations}`,
   };
 }

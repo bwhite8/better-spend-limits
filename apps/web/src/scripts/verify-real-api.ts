@@ -8,7 +8,7 @@
  * failing. This script breaks the loop by pointing the real client at the real
  * API and checking the answers against the schemas, row by row.
  *
- * Three properties make it safe to run against a live organisation:
+ * Three properties make it safe to run against a live organization:
  *
  * 1. **Read-only by construction.** The client's `fetch` is wrapped so that a
  *    non-GET request throws before it reaches the network — see
@@ -179,7 +179,7 @@ export function readOnlyFetch(inner: typeof globalThis.fetch): typeof globalThis
     const method = String(init?.method ?? fromRequest).toUpperCase();
     if (method !== "GET") {
       throw new Error(
-        `verify:api is read-only and refused a ${method} request. This script must never mutate an organisation.`,
+        `verify:api is read-only and refused a ${method} request. This script must never mutate an organization.`,
       );
     }
     return inner(input, init);
@@ -535,7 +535,7 @@ export function isLocalBaseUrl(baseUrl: string): boolean {
  *
  * The refusals are the point of this function: an unknown flag (a mistyped
  * `--dry-run` is the obvious one) and a localhost base URL both stop the run
- * rather than quietly doing the wrong thing to the wrong organisation.
+ * rather than quietly doing the wrong thing to the wrong organization.
  */
 export function resolveVerifyConfig(argv: string[], env: EnvLike = {}): ResolveResult {
   const flags = new Set(argv.filter((arg) => arg.startsWith("-")));

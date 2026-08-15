@@ -14,6 +14,7 @@
  * The query lives in `audit-query.ts`; this file is presentation only.
  */
 
+import { formatDateTime } from "@bsl/shared";
 import Link from "next/link";
 
 import type { AuditLogRow } from "@/db/schema";
@@ -29,12 +30,8 @@ const ACTION_LABELS: Record<string, string> = {
   deny_request: "Denied request",
   config_update: "Changed settings",
   import_employees: "Imported employees",
+  assign_ai_lead: "Assigned AI lead",
 };
-
-/** `2026-08-13T09:15:22.000Z` → `2026-08-13 09:15`. Seconds are noise here. */
-function formatTimestamp(iso: string): string {
-  return iso.length >= 16 ? `${iso.slice(0, 10)} ${iso.slice(11, 16)}` : iso;
-}
 
 function formatDetailValue(value: unknown): string {
   if (value === null) return "null";
@@ -100,7 +97,7 @@ export function AuditTable({ data, names }: AuditTableProps) {
                 className="border-b border-slate-100 align-top dark:border-slate-800"
               >
                 <td className="px-2 py-2 whitespace-nowrap tabular-nums text-slate-500">
-                  {formatTimestamp(row.at)}
+                  {formatDateTime(row.at)}
                 </td>
                 <td data-testid="audit-actor" className="px-2 py-2">
                   {row.actor_email}

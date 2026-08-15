@@ -40,7 +40,7 @@ import {
   requireWireAmount,
 } from "@/lib/member-limit";
 import { loadSnapshotIndex, snapshotFor } from "@/lib/members";
-import { canEdit, loadEditRoles } from "@/lib/permissions";
+import { authorityIdsOf, canEdit, loadEditRoles } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +78,7 @@ async function resolveWriteContext(context: RouteContext): Promise<WriteContext 
   const target = db.select().from(employees).where(eq(employees.id, id)).get();
   if (!target) return fail(404, "unknown_member", `no employee with id ${JSON.stringify(id)}`);
 
-  if (!canEdit(actor, target, loadEditRoles(db))) {
+  if (!canEdit(actor, target, loadEditRoles(db), authorityIdsOf(db, actor))) {
     return fail(403, "forbidden", "you are not allowed to edit this member's spend limit");
   }
 

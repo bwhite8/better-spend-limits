@@ -23,6 +23,7 @@ import { sql } from "drizzle-orm";
 
 import type { AppDatabase } from "@/db/client";
 import { employees, type NewEmployee } from "@/db/schema";
+import { pruneOrphanedAssignments } from "@/lib/ai-leads";
 import type { EmployeeCsvRow } from "@/lib/import-employees";
 
 /** SQLite's bound-parameter ceiling is well clear of this; §G7 has 11 columns. */
@@ -37,6 +38,8 @@ export interface ImportSummary {
   preserved: number;
   /** How many of the new rows can administer the app. */
   admins: number;
+  /** AI-lead delegations dropped because their lead or leader has left (§Phase 9). */
+  delegationsRemoved: number;
 }
 
 /**
@@ -79,6 +82,8 @@ export function applyEmployeeImport(
     };
   });
 
+  let delegationsRemoved = 0;
+
   db.transaction((tx) => {
     // §G7's self-references are not insertable in any single order — an aligned
     // AI lead may be an IC further down the file. Deferring the checks to COMMIT
@@ -91,6 +96,15 @@ export function applyEmployeeImport(
     for (let i = 0; i < values.length; i += INSERT_CHUNK) {
       tx.insert(employees).values(values.slice(i, i + INSERT_CHUNK)).run();
     }
+
+    // AFTER the insert, and inside the same transaction. `ai_lead_assignments`
+    // points at `employees`, so the deferred check runs at COMMIT: a delegation
+    // naming somebody the new roster does not have would abort the whole import
+    // with an opaque foreign-key error. Dropping those rows here is the honest
+    // reading of the file anyway — a lead or leader who has left the company
+    // does not keep their delegated access — and the count is reported back so
+    // it is a fact the admin is told, not one they discover.
+    delegationsRemoved = pruneOrphanedAssignments(tx);
   });
 
   return {
@@ -98,5 +112,6 @@ export function applyEmployeeImport(
     replaced: previous.length,
     preserved: values.filter((row) => row.claude_user_id !== null).length,
     admins: values.filter((row) => row.is_admin === true).length,
+    delegationsRemoved,
   };
 }

@@ -4,18 +4,18 @@ A self-hosted UI for the [Claude Spend Limits API](https://platform.claude.com/d
 and the [Analytics cost endpoint](https://platform.claude.com/docs/en/manage-claude/analytics-api),
 written to be **cloned and adapted** rather than installed.
 
-The APIs give an organisation exactly one lever — an admin key that can set any
+The APIs give an organization exactly one lever — an admin key that can set any
 member's limit — and no answer to the question every enterprise actually has:
 *who is allowed to raise whose budget?* This app supplies that answer. It joins
 the API's members to your employee hierarchy, so a director sees and edits their
 own org and nobody else's, an AI lead sees the people aligned to them, and every
 change lands in an audit log with a name attached.
 
-It runs as-is against a real organisation, and it assumes things about you that
+It runs as-is against a real organization, and it assumes things about you that
 will not all be true: that reporting lines arrive as a CSV, that an SSO proxy in
 front of the app is acceptable, that one SQLite file is enough state, that
 "director, VP or aligned AI lead" is the right rule. Each of those assumptions is
-roughly one file deep, and [Adapting it](#adapting-it-to-your-organisation) names
+roughly one file deep, and [Adapting it](#adapting-it-to-your-organization) names
 the file. Fork it, change what does not fit, keep your changes — the licence is
 MIT and there is no upstream service to stay compatible with.
 
@@ -25,14 +25,14 @@ Nothing phones home. The only outbound connection the app makes is to
 and the API keys never leave the server.
 
 **Look at it first:** <https://better-spend-limits-production.up.railway.app> —
-the whole app on Railway against a synthetic 250-person organisation rather than
+the whole app on Railway against a synthetic 250-person organization rather than
 anyone's real one. Pick a persona from the switcher at the bottom of the sidebar;
 there is no login, because there is nothing real behind it. See
 [The hosted sandbox](#the-hosted-sandbox) for exactly what is running there.
 
 ## What you get
 
-- **Members list and detail**, scoped to what you are allowed to see, showing each
+- **Users list and detail**, scoped to what you are allowed to see, showing each
   person's effective limit, where that limit came from (personal override, RBAC
   group, seat tier, org default) and their period-to-date spend.
 - **Edit flows** — set a per-user override or remove it and fall back to what the
@@ -40,13 +40,15 @@ there is no login, because there is nothing real behind it. See
   direct edit will not resolve.
 - **An increase-request queue** filtered to the requests you can act on, with
   approve-at-an-amount and deny.
-- **Analytics** — spend over time, a near-limit report, week-over-week movers and
-  top spenders, all scoped the same way, with the provisional tail of recent
-  data visually marked rather than presented as final.
-- **An admin area** — permission config, HRIS roster import by CSV, the audit log,
-  and the list of API members who match nobody on your roster.
+- **Analytics** — month-to-date spend and per-user average, spend over time, a
+  near-limit report, week-over-week movers and top spenders, all scoped the same
+  way, with the provisional tail of recent data visually marked rather than
+  presented as final. The organization-wide figures beside your own are the one
+  deliberate exception to that scoping, and `show_org_wide_kpis` turns them off.
+- **An admin area** — permission config, AI-lead delegation, HRIS roster import by
+  CSV, the audit log, and the list of API members who match nobody on your roster.
 - **A high-fidelity mock of the whole API surface**, so you can evaluate the thing
-  end to end against a 250-person synthetic organisation before it ever sees a
+  end to end against a 250-person synthetic organization before it ever sees a
   real key — and so your fork has something to test against in CI.
 
 ## What you are taking on
@@ -65,7 +67,7 @@ The operational surface is one container and one file:
 | **State** | One SQLite file at `DATABASE_PATH` — roster, config, audit log, synced snapshots. Backup is `cp`. |
 | **Replicas** | Run one. The sync lock lives in the database, so parallel renders inside a process are safe; two processes on two filesystems would double your API usage and split the audit log. Horizontal scale means [moving off SQLite](#storage--sqlite-and-when-it-stops-being-enough). |
 | **Authentication** | None of its own. It reads a header your SSO proxy sets. |
-| **Load** | Read-mostly, internal, sized for an organisation of hundreds. Page renders hit SQLite, not the API. |
+| **Load** | Read-mostly, internal, sized for an organization of hundreds. Page renders hit SQLite, not the API. |
 | **Failure mode** | An API outage degrades to stale numbers with the age shown in the sidebar, not to a 500. |
 
 What it deliberately does not have: a scheduler, notifications, an approval
@@ -108,7 +110,7 @@ and there is no plugin interface you have to fit it through.
 removing an override, approving or denying a request — are live pass-through
 calls to the API, followed by a targeted re-read of just that member. Reads come
 from a local snapshot that a sync engine pages in, because the API allows 60
-requests per minute per organisation across every endpoint and a members list
+requests per minute per organization across every endpoint and a members list
 that fanned out per row would exhaust that budget on one page view.
 
 So: the API is the source of truth, SQLite is a cache plus the enrichment (your
@@ -131,7 +133,7 @@ npm run dev            # mock API on :8787, web app on :3000
 ```
 
 Open <http://localhost:3000> and pick a persona from the switcher at the bottom
-of the sidebar. The interesting ones in the seed-42 organisation:
+of the sidebar. The interesting ones in the seed-42 organization:
 
 | Persona | Email | What you see |
 |---|---|---|
@@ -140,7 +142,7 @@ of the sidebar. The interesting ones in the seed-42 organisation:
 | Tariq Lindqvist | `tariq.lindqvist@example.com` | an AI lead — the people aligned to them |
 | Sofia Abara | `sofia.abara@example.com` | an ordinary IC — themselves, and nothing else |
 
-Everything is real except the organisation behind it: the app is making genuine
+Everything is real except the organization behind it: the app is making genuine
 HTTP calls to `apps/mock-api`, which implements all eight spend-limits endpoints
 and the cost report, including cursor binding, upsert semantics, approve/deny
 state transitions, rate limiting and the provisional-data watermark.
@@ -166,13 +168,32 @@ target's configured role columns, plus any admin. The set of columns that count
 is config, not code — `edit_roles` in the admin area, defaulting to:
 
 ```
-["tier3_manager", "tier4_manager", "aligned_ai_lead"]
+["tier3_manager", "tier4_manager"]
 ```
 
 So by default a person's own manager cannot change their budget, but their
-director, their VP and their aligned AI lead can. Columns that are null (the CEO
-has no tier-4 manager) are skipped rather than treated as a match. Setting
-`edit_roles` to `[]` is legitimate and means admins only.
+director and their VP can. Columns that are null (the CEO has no tier-4 manager)
+are skipped rather than treated as a match. Setting `edit_roles` to `[]` is
+legitimate and means admins only.
+
+**AI leads are delegated, not inherited.** `aligned_ai_lead_id` is on the roster
+because HRIS exports carry it, but it is deliberately *not* a grantable role: it
+is assigned across whole subtrees, so a lead's reach had nothing to do with their
+own place in the hierarchy — on the synthetic org, the eight leads would have
+seen 87, 69, 27, 26, 25, 25, 24 and 11 people. Instead an admin assigns each lead
+to one or more tier-2/3/4 leaders in the admin area, and the lead exercises
+exactly those leaders' hierarchy roles. Three rules hold:
+
+- **The leaders' people, never the leaders.** A lead cannot see or edit the
+  person they were assigned to, only who that person's roles reach.
+- **Never an admin.** Assigning a lead to an administrator is refused, in the
+  form and in the server action: an admin's scope is the whole organization, so
+  it would be a grant of admin rights under another name.
+- **One hop.** A leader's own delegations never chain onward.
+
+The rule is one set: `canEdit` compares the target's role columns against
+`[actor.id, ...leaders delegated to the actor]` rather than against the actor's
+id alone. Every assignment is an `audit_log` row.
 
 **Who may see a member.** You can view exactly the people you can edit, plus
 yourself. Admins view everyone. There is no read-only-but-visible tier: if a
@@ -184,13 +205,13 @@ it is actionable by you. A request from someone with no employee record is
 visible to admins only, flagged as unmatched.
 
 **Everything that writes, audits.** Setting a limit, removing an override,
-approving, denying, changing config and importing a roster each insert an
-`audit_log` row with the actor's email, the target, and a JSON detail blob
+approving, denying, changing config, delegating an AI lead and importing a roster
+each insert an `audit_log` row with the actor's email, the target, and a JSON detail blob
 carrying old and new values and the upstream `request_id` where there was one.
 Failed API calls are audited too — an attempted write that got a 429 is exactly
 the thing you want a record of.
 
-## Adapting it to your organisation
+## Adapting it to your organization
 
 Six seams, in rough order of how likely you are to need them. Each is a named
 place in the code rather than a setting in a configuration language — this is a
@@ -245,6 +266,12 @@ A **new relationship** — a dotted-line lead, a cost-centre owner, a delegate �
 is a migration adding one column, one entry in `EDIT_ROLE_VALUES`, and nothing
 else: the permission engine resolves it by name.
 
+A **person-by-person grant** rather than a column has a worked example already:
+AI-lead delegation is a join table (`ai_lead_assignments`), an authority set
+resolved once per request by `authorityIdsOf`, and an admin form. Copy that shape
+rather than adding a second `canEdit` — it stays one comparison, and it stays out
+of the per-request loops.
+
 A **differently-shaped rule** — one that is not "the actor's id appears in a
 column on the target's row", such as membership in a cost centre or a grant over
 a whole department — means editing `canEdit` and `visibleEmployees` in
@@ -258,8 +285,8 @@ control.
 ### Storage — SQLite, and when it stops being enough
 
 Drizzle, one schema file, one migration directory (`apps/web/drizzle`). The
-snapshot tables are disposable; `employees`, `app_config` and `audit_log` are
-not.
+snapshot tables are disposable; `employees`, `app_config`, `ai_lead_assignments`
+and `audit_log` are not.
 
 SQLite is the right default for a single-instance internal tool and the wrong
 default if you need multiple replicas, an existing backup regime, or the audit
@@ -278,8 +305,8 @@ self-referencing keys per statement instead, so the equivalent is
 
 `sync_stale_after_minutes` (default 15) is the whole cadence story: a page render
 that finds the snapshot older than that refreshes it first. The number is a
-trade between staleness and the API's 60 requests per minute per organisation —
-which is an organisation-wide budget, so anything else you run against the same
+trade between staleness and the API's 60 requests per minute per organization —
+which is an organization-wide budget, so anything else you run against the same
 org is spending from it too. Set `MOCK_RATE_LIMIT` to a number in local runs to
 rehearse what hitting it looks like before you find out in production.
 
@@ -307,20 +334,27 @@ verified email header).
 
 `AUTH_MODE=dev` has no authentication whatsoever — it exists so a demo can switch
 personas. The hosted sandbox runs it on a public URL and that is fine there,
-because the only organisation it can damage is a fixture regenerated on the next
+because the only organization it can damage is a fixture regenerated on the next
 redeploy. Reachability is not the test: what matters is whether a real Admin key
 is behind the app. If one is, `AUTH_MODE=dev` means the first person to guess the
 URL can raise their own budget.
+
+**`DEV_DEFAULT_EMAIL` is rejected under `AUTH_MODE=proxy`.** In dev mode it names
+the employee a cookie-less visitor becomes, which is how the demo opens on a
+populated page. In proxy mode the same variable would hand an identity to a
+request whose SSO header went missing — a proxy misconfiguration silently
+becoming a logged-in session. Setting both throws at startup, with a message
+naming both variables, rather than resolving to one of them.
 
 ### 2. Credentials
 
 Provide `ANTHROPIC_ADMIN_KEY` and `ANTHROPIC_ANALYTICS_KEY` from your secret
 store, not from a file on the host. The Admin key can set any member's limit and
-approve any increase request in your organisation; scope your handling of it
+approve any increase request in your organization; scope your handling of it
 accordingly.
 
 > **The ambient-variable hazard applies here too, in reverse.** A base URL is the
-> one setting that decides which organisation this app mutates, and a real
+> one setting that decides which organization this app mutates, and a real
 > environment variable silently beats every config file. Whatever your deployment
 > mechanism, confirm the value the *running process* resolved rather than the one
 > you think you set — that is what the "Base URL" line printed by
@@ -342,7 +376,10 @@ Import is a transactional full replace, validated before anything is written:
 manager and AI-lead references must resolve within the file, emails must be
 unique, and a roster with no `is_admin=1` row is refused — nothing else could
 undo that. `claude_user_id` and `created_at` are preserved for emails present on
-both the old and new roster, so a re-import does not force a re-match.
+both the old and new roster, so a re-import does not force a re-match. AI-lead
+delegations naming somebody the new file does not contain are dropped in the same
+transaction, and the count is reported back — a delegation is a permission, so
+losing one is told, not discovered.
 
 > An admin can upload a roster that does not include themselves, and will lose
 > access on the next page load. The audit row still names them: `audit_log` has
@@ -350,7 +387,7 @@ both the old and new roster, so a re-import does not force a re-match.
 > Re-running `npm run db:seed` restores the synthetic roster if you are testing.
 
 Members the API reports but the roster does not contain appear under **Unmatched
-members** in the admin area. They are invisible to everyone except admins until
+users** in the admin area. They are invisible to everyone except admins until
 someone adds them, which is the intended failure mode — an unknown member should
 not silently become nobody's responsibility.
 
@@ -383,7 +420,7 @@ should have no path by which a misconfigured base URL lands on a fixture.
 
 <https://better-spend-limits-production.up.railway.app> is that same demo profile
 on Railway. **Both** images are deployed, as two services — `Dockerfile.web` for
-the app, `Dockerfile.mock` for the synthetic organisation — with the web
+the app, `Dockerfile.mock` for the synthetic organization — with the web
 service's `ANTHROPIC_BASE_URL` pointed at the mock over Railway's private
 network. The same two containers `docker compose up` gives you, hosted rather
 than local. No Anthropic key exists anywhere in it; the only credentials are the
@@ -436,7 +473,7 @@ For whoever has to review this before it goes on your network:
   values, and the upstream request id. Append-only, no foreign key to
   `employees`, so removing a person does not erase what they did.
 - **Blast radius, honestly.** The Admin key can change any limit in the
-  organisation. Anyone who can reach the app while `AUTH_MODE=proxy` is set and
+  organization. Anyone who can reach the app while `AUTH_MODE=proxy` is set and
   spoof the header is an admin of this app; anyone who can read the container's
   environment has the key itself.
 
@@ -470,7 +507,7 @@ browser.
 >
 > This has happened on this project more than once. Reads fail with 401, which
 > looks like a broken demo; but the edit-limit and approve/deny flows are writes,
-> and they would land on a **real organisation**.
+> and they would land on a **real organization**.
 >
 > Check what your shell is actually exporting:
 >
@@ -497,6 +534,7 @@ browser.
 | `ANTHROPIC_ANALYTICS_KEY` | — | Analytics API key, scope `read:analytics`. A **separate** key; the API rejects the Admin key here. |
 | `AUTH_MODE` | `dev` | `dev` = impersonation cookie and the user switcher (no authentication at all). `proxy` = trust `AUTH_HEADER`. An unrecognised value is a startup error rather than a silent fallback. |
 | `AUTH_HEADER` | `x-forwarded-email` | Header carrying the authenticated email in proxy mode. |
+| `DEV_DEFAULT_EMAIL` | — | **Dev mode only.** Who a visitor with no impersonation cookie becomes, so a fresh clone opens on a populated page instead of the "not provisioned" 403. A cookie always wins, including one that names nobody. Setting this with `AUTH_MODE=proxy` is a startup error. |
 | `DATABASE_PATH` | `./data/app.db` | SQLite file. Relative paths resolve against the working directory, which is `apps/web` for every command that opens it. |
 
 ### `apps/mock-api`
@@ -510,7 +548,7 @@ stack that also holds a real Admin key.
 | `PORT` | `8787` | Port the mock listens on. |
 | `MOCK_ADMIN_KEY` | `mock-admin-key` | Key the spend-limits surface accepts. |
 | `MOCK_ANALYTICS_KEY` | `mock-analytics-key` | Key the analytics surface accepts. |
-| `MOCK_SEED` | `42` | Seed for the synthetic organisation. 42 is what the test fixtures refer to. |
+| `MOCK_SEED` | `42` | Seed for the synthetic organization. 42 is what the test fixtures refer to. |
 | `MOCK_RATE_LIMIT` | `off` | `off`, or requests per minute. Set a number to rehearse hitting the real 60/min org limit. |
 
 `.env.example` at the repo root carries the same list in copyable form.
@@ -543,7 +581,7 @@ Known gaps, all sitting on the "we could not observe it" side of the line:
   implemented but unexercised.
 
 **`npm run verify:api` closes the loop**, and is the first thing to run against
-your own organisation's keys before you trust a fork of this in production. It
+your own organization's keys before you trust a fork of this in production. It
 points the real client at the real API and checks every returned row against the
 schemas in `packages/shared`:
 
@@ -553,7 +591,7 @@ ANTHROPIC_ADMIN_KEY=… ANTHROPIC_ANALYTICS_KEY=… npm run verify:api
 
 It issues three GETs — the first page of effective limits, the first page of
 increase requests, and a 7-day cost report — and nothing else. The `fetch` it
-uses throws on any non-GET request, so it cannot mutate an organisation even if
+uses throws on any non-GET request, so it cannot mutate an organization even if
 someone later adds a check that tries to. It refuses to run against a localhost
 base URL unless you pass `--force`, because verifying the mock against the
 schemas the mock was built from proves nothing; `npm run verify:api -- --dry-run`

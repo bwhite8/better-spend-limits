@@ -17,10 +17,13 @@ import type { AppDatabase } from "@/db/client";
 import {
   APP_CONFIG_DEFAULTS,
   EDIT_ROLE_VALUES,
+  RETIRED_EDIT_ROLE_VALUES,
   type AppConfigDefaults,
   type EditRole,
 } from "@/db/config-defaults";
 import { appConfig } from "@/db/schema";
+
+import { writeAudit } from "./audit";
 
 /** Raw `key → value` (still JSON-encoded) for every configured key. */
 export function readRawConfig(db: AppDatabase): Map<string, string> {
@@ -83,5 +86,62 @@ export function loadAppConfig(db: AppDatabase): AppConfigDefaults {
     sync_stale_after_minutes:
       validatePositiveInt(read("sync_stale_after_minutes")) ??
       APP_CONFIG_DEFAULTS.sync_stale_after_minutes,
+    show_org_wide_kpis:
+      validateBoolean(read("show_org_wide_kpis")) ?? APP_CONFIG_DEFAULTS.show_org_wide_kpis,
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Retired roles                                                              */
+/* -------------------------------------------------------------------------- */
+
+/** The actor recorded for a change nobody asked for. */
+const SYSTEM_ACTOR = { id: null, email: "system@better-spend-limits" };
+
+const isRetiredRole = (value: unknown): boolean =>
+  typeof value === "string" && (RETIRED_EDIT_ROLE_VALUES as readonly string[]).includes(value);
+
+/**
+ * Rewrite a persisted `edit_roles` that still names a retired role (§Phase 9).
+ *
+ * Without this the change would be invisible: `validateEditRoles` rejects the
+ * whole array if any entry is unknown, so a database carrying
+ * `["tier3_manager","tier4_manager","aligned_ai_lead"]` would quietly start
+ * serving the new default instead. Behaviourally that is right, but an
+ * administrator's stored intent would have changed with nothing in the audit log
+ * saying so — and the admin form would go on showing whatever survived.
+ *
+ * So the retired entries are dropped, the remainder is kept (that part of the
+ * intent still holds), the row is rewritten, and one `config_update` entry
+ * records it. An array left empty falls back to the default, because "admins
+ * only" is a policy somebody chooses, not a policy a migration imposes.
+ *
+ * Idempotent, and a no-op on every database that has already been rewritten —
+ * which is why {@link getDb} can call it on the first open of the handle.
+ */
+export function migrateRetiredEditRoles(db: AppDatabase): { changed: boolean } {
+  const raw = readRawConfig(db).get("edit_roles");
+  const parsed = parseJson(raw);
+  if (!Array.isArray(parsed) || !parsed.some(isRetiredRole)) return { changed: false };
+
+  const kept = [...new Set(parsed.filter(isEditRole))];
+  const next = kept.length > 0 ? kept : APP_CONFIG_DEFAULTS.edit_roles;
+  const encoded = JSON.stringify(next);
+
+  db.insert(appConfig)
+    .values({ key: "edit_roles", value: encoded })
+    .onConflictDoUpdate({ target: appConfig.key, set: { value: encoded } })
+    .run();
+
+  writeAudit(db, {
+    actor: SYSTEM_ACTOR,
+    action: "config_update",
+    detail: {
+      outcome: "success",
+      reason: "retired_edit_roles",
+      changed: { edit_roles: { from: parsed, to: next } },
+    },
+  });
+
+  return { changed: true };
 }

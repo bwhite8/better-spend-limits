@@ -17,6 +17,7 @@
  * have no summary by design, so they show only what happened and when.
  */
 
+import { formatDate } from "@bsl/shared";
 import Link from "next/link";
 
 import { getDb } from "@/db/client";
@@ -110,7 +111,7 @@ function RequestCard({ entry, prefillDollars, suppressDefault }: CardProps) {
           {entry.requester === null ? (
             <span
               data-testid="unmatched-flag"
-              title="This API member matches no row in the employee roster."
+              title="This API user matches no row in the employee roster."
               className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200"
             >
               No employee record
@@ -118,9 +119,9 @@ function RequestCard({ entry, prefillDollars, suppressDefault }: CardProps) {
           ) : null}
         </div>
         <p className="text-xs text-slate-500">
-          <span data-testid="request-created">Raised {entry.createdAt.slice(0, 10)}</span>
+          <span data-testid="request-created">Raised {formatDate(entry.createdAt)}</span>
           {entry.resolvedAt === null ? null : (
-            <span data-testid="request-resolved"> · resolved {entry.resolvedAt.slice(0, 10)}</span>
+            <span data-testid="request-resolved"> · resolved {formatDate(entry.resolvedAt)}</span>
           )}
         </p>
       </div>
@@ -195,7 +196,7 @@ export default async function RequestsPage({
         <h1 className="text-2xl font-semibold tracking-tight">Requests</h1>
         <p className="text-sm text-slate-500">
           {actor.is_admin
-            ? "Every increase request in the organisation."
+            ? "Every increase request in the organization."
             : "Increase requests from people whose spend limit you can edit."}
         </p>
       </header>

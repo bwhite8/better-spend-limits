@@ -23,6 +23,14 @@ export interface MoneyProps {
   amount: string | null;
   /** ISO currency code. `null`/absent falls back to USD, as the API does. */
   currency?: string | null;
+  /**
+   * Render `$500` rather than `$500.00` when the amount is whole dollars.
+   *
+   * LIST VIEWS ONLY. A column of caps is scanned, not audited, and the `.00`
+   * on every row is noise. Anywhere the exact figure is the point — the member
+   * page, the edit dialogs, the audit log — leave this off.
+   */
+  trimWholeDollars?: boolean;
   className?: string;
 }
 
@@ -32,10 +40,10 @@ export interface MoneyProps {
  * A malformed amount renders as the literal string rather than throwing: a
  * money formatter must never be the reason a page 500s.
  */
-export function Money({ amount, currency, className }: MoneyProps) {
+export function Money({ amount, currency, trimWholeDollars, className }: MoneyProps) {
   let text: string;
   try {
-    text = formatMoney(amount, currency ?? undefined);
+    text = formatMoney(amount, currency ?? undefined, { trimWholeDollars });
   } catch {
     text = amount ?? UNLIMITED_LABEL;
   }

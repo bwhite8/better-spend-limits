@@ -47,6 +47,40 @@ export const employees = sqliteTable("employees", {
   updated_at: text("updated_at").notNull(),
 });
 
+/**
+ * Which LEADERS an AI lead speaks for (§Phase 9).
+ *
+ * `employees.aligned_ai_lead_id` still records the HRIS fact "this person's AI
+ * lead is X", but it stopped being a source of authority: it is assigned across
+ * whole VP subtrees, so a lead's reach bore no relation to their own place in
+ * the hierarchy. Delegation is an explicit admin decision instead — assign a
+ * lead to one or more tier-2/3/4 leaders and they inherit exactly what those
+ * leaders' hierarchy roles grant.
+ *
+ * Two rules the schema cannot state and the code must:
+ *
+ * - **Non-transitive.** Resolution is one hop. A leader's own delegations never
+ *   chain onward to a lead assigned to them.
+ * - **Never an admin.** An admin's "scope" is the whole organization, so
+ *   inheriting it would be indistinguishable from granting admin rights.
+ *   `lib/ai-leads.ts` rejects it, on the server, on every write.
+ */
+export const aiLeadAssignments = sqliteTable(
+  "ai_lead_assignments",
+  {
+    /** The AI lead who gains the leader's scope. */
+    lead_employee_id: text("lead_employee_id")
+      .notNull()
+      .references((): AnySQLiteColumn => employees.id),
+    /** The tier-2/3/4 leader whose scope is delegated. Never an admin. */
+    leader_employee_id: text("leader_employee_id")
+      .notNull()
+      .references((): AnySQLiteColumn => employees.id),
+    created_at: text("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.lead_employee_id, table.leader_employee_id] })],
+);
+
 /** Key/value application configuration. `value` is always JSON-encoded (§G7). */
 export const appConfig = sqliteTable("app_config", {
   key: text("key").primaryKey(),
@@ -130,6 +164,8 @@ export const syncState = sqliteTable("sync_state", {
 
 export type Employee = typeof employees.$inferSelect;
 export type NewEmployee = typeof employees.$inferInsert;
+export type AiLeadAssignmentRow = typeof aiLeadAssignments.$inferSelect;
+export type NewAiLeadAssignmentRow = typeof aiLeadAssignments.$inferInsert;
 export type AppConfigRow = typeof appConfig.$inferSelect;
 export type AuditLogRow = typeof auditLog.$inferSelect;
 export type NewAuditLogRow = typeof auditLog.$inferInsert;

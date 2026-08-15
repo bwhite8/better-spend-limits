@@ -13,6 +13,8 @@ import { pathToFileURL } from "node:url";
 import { sql } from "drizzle-orm";
 import { DEFAULT_SEED, generateOrg } from "@bsl/seed";
 
+import { pruneOrphanedAssignments } from "@/lib/ai-leads";
+
 import type { AppDatabase } from "./client";
 import { closeDb, getDb } from "./client";
 import { appConfigDefaultRows } from "./config-defaults";
@@ -69,6 +71,12 @@ export function seedDatabase(db: AppDatabase, options: SeedOptions = {}): SeedRe
     for (let i = 0; i < rows.length; i += 100) {
       tx.insert(employees).values(rows.slice(i, i + 100)).run();
     }
+
+    // Re-seeding restores the same 250 ids, so delegations normally survive it
+    // untouched. They would not survive a re-seed onto a roster imported from a
+    // different HRIS — and a stale row there fails the deferred foreign-key
+    // check at COMMIT rather than anywhere useful.
+    pruneOrphanedAssignments(tx);
 
     for (const row of appConfigDefaultRows()) {
       tx.insert(appConfig).values(row).onConflictDoNothing().run();

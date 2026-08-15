@@ -42,7 +42,7 @@ async function loadNavProps(): Promise<NavProps> {
     // `sync_state` AFTER the refresh it triggered. Doing it page-side left the
     // sidebar reporting "Never synced" next to freshly synced numbers.
     // Gated on a resolved identity for the same reason `/api/sync` is: syncing
-    // spends the organisation's shared rate-limit budget (§G4).
+    // spends the organization's shared rate-limit budget (§G4).
     if (actor !== null) await ensureFreshSync(db);
 
     const roster = db.select().from(employees).orderBy(employees.name, employees.id).all();

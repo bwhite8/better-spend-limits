@@ -24,6 +24,8 @@ export const AUDIT_ACTIONS = [
   "deny_request",
   "config_update",
   "import_employees",
+  /** Which leaders an AI lead speaks for — a permission grant, so it is recorded (§Phase 9). */
+  "assign_ai_lead",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

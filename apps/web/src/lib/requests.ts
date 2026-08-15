@@ -38,7 +38,12 @@ import {
   type NewIncreaseRequestSnapshotRow,
 } from "@/db/schema";
 import { loadSnapshotIndex, snapshotFor, type SnapshotIndex } from "@/lib/members";
-import { canActOnRequest, type PermissionActor } from "@/lib/permissions";
+import {
+  authorityIdsOf,
+  canActOnRequest,
+  type AuthoritySet,
+  type PermissionActor,
+} from "@/lib/permissions";
 
 /** The only status that can still be acted on (§G4). */
 export const PENDING_STATUS = "pending";
@@ -211,6 +216,10 @@ export function loadRequestQueue(
   db: AppDatabase,
   actor: PermissionActor,
   editRoles: EditRole[],
+  // Resolved ONCE, here, and then read inside the loop below. §Phase 9's
+  // delegation is a database fact, and a per-row lookup would be one query per
+  // pending request.
+  authority: AuthoritySet = authorityIdsOf(db, actor),
 ): RequestQueue {
   const rows = db
     .select()
@@ -227,7 +236,7 @@ export function loadRequestQueue(
 
   for (const row of rows) {
     const requester = requesterOf(index, row);
-    if (!canActOnRequest(actor, requester, editRoles)) continue;
+    if (!canActOnRequest(actor, requester, editRoles, authority)) continue;
 
     const isPending = row.status === PENDING_STATUS;
     const entry = toEntry(

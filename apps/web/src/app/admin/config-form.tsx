@@ -3,8 +3,9 @@
 /**
  * The application settings editor (§G7 `app_config`, plan §Phase 13).
  *
- * These four values are not preferences — `edit_roles` alone decides who may
- * change anybody's spend limit (§G8) — so each field says, in plain words, what
+ * These five values are not preferences — `edit_roles` alone decides which
+ * hierarchy roles may change anybody's spend limit (§G8) — so each field says,
+ * in plain words, what
  * turning it changes. The role checkboxes in particular are a permission grid
  * wearing a checkbox costume, and the caption spells out the consequence.
  *
@@ -21,13 +22,17 @@ import { EDIT_ROLE_VALUES, type AppConfigDefaults, type EditRole } from "@/db/co
 import { updateConfig } from "./actions";
 import type { AdminActionResult } from "./types";
 
-/** Human wording for each §G8 role, in the order the hierarchy runs. */
+/**
+ * Human wording for each §G8 role, in the order the hierarchy runs.
+ *
+ * `aligned_ai_lead` used to be here. It is now an explicit per-lead delegation
+ * in its own section (§Phase 9) rather than a column anyone can switch on.
+ */
 const ROLE_LABELS: Record<EditRole, string> = {
   direct_manager: "Direct manager (tier 1)",
   tier2_manager: "Tier 2 manager",
   tier3_manager: "Tier 3 manager",
   tier4_manager: "Tier 4 manager",
-  aligned_ai_lead: "Aligned AI lead",
 };
 
 export interface ConfigFormProps {
@@ -42,6 +47,7 @@ export function ConfigForm({ initial }: ConfigFormProps) {
   const [threshold, setThreshold] = useState(String(initial.near_limit_threshold));
   const [suppress, setSuppress] = useState(initial.suppress_notification_default);
   const [staleAfter, setStaleAfter] = useState(String(initial.sync_stale_after_minutes));
+  const [orgKpis, setOrgKpis] = useState(initial.show_org_wide_kpis);
   const [result, setResult] = useState<AdminActionResult | null>(null);
 
   const thresholdValue = Number(threshold);
@@ -73,6 +79,7 @@ export function ConfigForm({ initial }: ConfigFormProps) {
         near_limit_threshold: thresholdValue,
         suppress_notification_default: suppress,
         sync_stale_after_minutes: staleValue,
+        show_org_wide_kpis: orgKpis,
       });
 
       setResult(answer);
@@ -88,7 +95,8 @@ export function ConfigForm({ initial }: ConfigFormProps) {
         <legend className="text-sm font-medium">Who may edit a spend limit</legend>
         <p className="text-xs text-slate-500">
           A person may edit somebody&rsquo;s limit — and resolve their increase requests — when they
-          hold one of these roles over them. Admins always may.
+          hold one of these roles over them. Admins always may, and an AI lead may exercise these
+          same roles for whichever leaders are delegated to them below.
         </p>
         <div className="mt-1 flex flex-col gap-1.5">
           {EDIT_ROLE_VALUES.map((role) => (
@@ -166,7 +174,30 @@ export function ConfigForm({ initial }: ConfigFormProps) {
         />
         <span className="text-xs text-slate-500">
           How old the local snapshot may get before a page view triggers a refresh. The
-          organisation shares 60 API requests a minute, so shorter is not always better.
+          organization shares 60 API requests a minute, so shorter is not always better.
+        </span>
+      </label>
+
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={orgKpis}
+          disabled={pending}
+          data-testid="config-org-kpis"
+          onChange={(event) => {
+            setResult(null);
+            setOrgKpis(event.target.checked);
+          }}
+          className="h-5 w-5 shrink-0 md:h-3.5 md:w-3.5"
+        />
+        <span>
+          <span className="font-medium">Show organization-wide spend on Analytics</span>
+          <span className="block text-xs text-slate-500">
+            Gives everyone a total and a per-user average for the whole organization, next to the
+            same two figures for their own scope. No individual is named and no per-person figure
+            can be read off it — but it does describe people the viewer cannot otherwise see. Turn
+            it off and everybody sees their own scope only.
+          </span>
         </span>
       </label>
 

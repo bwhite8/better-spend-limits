@@ -13,6 +13,7 @@
  * button is a UI convenience, never the access control.
  */
 
+import { formatDate } from "@bsl/shared";
 import { eq, inArray } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -24,7 +25,15 @@ import { Money, SpendBar } from "@/components/money";
 import { SourceBadge } from "@/components/source-badge";
 import { currentEmployee } from "@/lib/identity";
 import { loadSnapshotIndex, requestsForUser, snapshotFor } from "@/lib/members";
-import { canEdit, canView, editorIdsOf, editRoleColumn, loadEditRoles } from "@/lib/permissions";
+import {
+  authorityIdsOf,
+  canEdit,
+  canView,
+  delegatedEditorsOf,
+  editorIdsOf,
+  editRoleColumn,
+  loadEditRoles,
+} from "@/lib/permissions";
 import { ensureFreshSync } from "@/lib/sync-runner";
 
 import { NotVisible } from "../../forbidden";
@@ -37,13 +46,33 @@ const ROLE_LABELS: Record<EditRole, string> = {
   tier2_manager: "Tier 2 manager",
   tier3_manager: "Tier 3 manager",
   tier4_manager: "Tier 4 manager",
-  aligned_ai_lead: "Aligned AI lead",
 };
 
-/** The hierarchy as shown on the page — always all five, config or no config. */
-const CHAIN: { role: EditRole; label: string }[] = (
-  ["direct_manager", "tier2_manager", "tier3_manager", "tier4_manager", "aligned_ai_lead"] as const
-).map((role) => ({ role, label: ROLE_LABELS[role] }));
+/**
+ * The hierarchy as shown on the page — always all five columns, config or no
+ * config.
+ *
+ * `aligned_ai_lead_id` is on this list and NOT in `ROLE_LABELS`: it is still
+ * real HRIS data worth showing, and since §Phase 9 it grants nothing on its own.
+ * Whoever the lead speaks for is an explicit delegation, shown in Edit access
+ * below when it applies to this person.
+ */
+const CHAIN: { column: keyof PersonColumns; label: string }[] = [
+  { column: "direct_manager_id", label: "Direct manager" },
+  { column: "tier2_manager_id", label: "Tier 2 manager" },
+  { column: "tier3_manager_id", label: "Tier 3 manager" },
+  { column: "tier4_manager_id", label: "Tier 4 manager" },
+  { column: "aligned_ai_lead_id", label: "Aligned AI lead" },
+];
+
+type PersonColumns = Pick<
+  Employee,
+  | "direct_manager_id"
+  | "tier2_manager_id"
+  | "tier3_manager_id"
+  | "tier4_manager_id"
+  | "aligned_ai_lead_id"
+>;
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -75,7 +104,8 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
   if (!target) notFound();
 
   const editRoles = loadEditRoles(db);
-  if (!canView(actor, target, editRoles)) return <NotVisible />;
+  const authority = authorityIdsOf(db, actor);
+  if (!canView(actor, target, editRoles, authority)) return <NotVisible />;
 
   await ensureFreshSync(db);
 
@@ -85,16 +115,23 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
   const highlighted = requests.find((request) => request.status === "pending") ?? requests[0] ?? null;
   const summary = highlighted === null ? null : parseSpendSummary(highlighted.spend_summary);
   const hasPendingRequest = requests.some((request) => request.status === "pending");
-  const editable = canEdit(actor, target, editRoles);
+  const editable = canEdit(actor, target, editRoles, authority);
 
-  // One lookup for every name this page shows: the five hierarchy roles plus
-  // whoever holds an editing role over the target.
+  // Who may edit this person, in two halves that answer the same question:
+  // whoever holds a configured role over them, and whoever has had one of those
+  // role-holders delegated to them (§Phase 9). The second half cannot be derived
+  // from the target's own columns — that is exactly why it needs the database.
   const editorIds = editorIdsOf(target, editRoles);
+  const delegated = delegatedEditorsOf(db, target, editRoles);
+
+  // One lookup for every name this page shows: the five hierarchy columns, the
+  // role holders, and the delegated leads.
   const relatedIds = [
     ...new Set(
       [
-        ...CHAIN.map(({ role }) => target[editRoleColumn(role)]),
+        ...CHAIN.map(({ column }) => target[column]),
         ...editorIds,
+        ...delegated.map((editor) => editor.id),
       ].filter((value): value is string => value !== null),
     ),
   ];
@@ -105,18 +142,29 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
     ).map((row) => [row.id, row]),
   );
 
+  const nameOf = (id: string): string => related.get(id)?.name ?? id;
+
+  // Keyed by editor rather than by role, because the card answers "who do I ask"
+  // and one person can hold two roles over the same target.
   const rolesByEditor = new Map<string, string[]>();
   for (const role of editRoles) {
     const holder = target[editRoleColumn(role)];
     if (holder === null) continue;
     rolesByEditor.set(holder, [...(rolesByEditor.get(holder) ?? []), ROLE_LABELS[role]]);
   }
+  for (const editor of delegated) {
+    rolesByEditor.set(editor.id, [
+      ...(rolesByEditor.get(editor.id) ?? []),
+      `AI lead delegated by ${editor.viaLeaderIds.map(nameOf).join(", ")}`,
+    ]);
+  }
+  const allEditorIds = [...new Set([...editorIds, ...delegated.map((editor) => editor.id)])];
 
   return (
     <section className="flex max-w-4xl flex-col gap-8">
       <header className="flex flex-col gap-1">
-        <Link href="/" className="text-sm text-indigo-700 hover:underline dark:text-indigo-300">
-          ← Members
+        <Link href="/members" className="text-sm text-indigo-700 hover:underline dark:text-indigo-300">
+          ← Users
         </Link>
         <h1 data-testid="member-name" className="text-2xl font-semibold tracking-tight">
           {target.name}
@@ -141,7 +189,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
           </h2>
           {snapshot === null ? (
             <p className="text-sm text-slate-500" data-testid="limit-unsynced">
-              No synced limit for this member yet.
+              No synced limit for this user yet.
             </p>
           ) : (
             <dl className="flex flex-col gap-3">
@@ -181,11 +229,11 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
         <article className="flex flex-col gap-4" data-testid="identity-card">
           <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">Reporting</h2>
           <dl className="flex flex-col gap-3">
-            {CHAIN.map(({ role, label }) => {
-              const holderId = target[editRoleColumn(role)];
+            {CHAIN.map(({ column, label }) => {
+              const holderId = target[column];
               const holder = holderId === null ? null : (related.get(holderId) ?? null);
               return (
-                <Field key={role} label={label}>
+                <Field key={column} label={label}>
                   {holder === null ? (
                     <span className="text-slate-400">—</span>
                   ) : (
@@ -215,9 +263,9 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
           <div className="flex flex-col gap-2 text-sm" data-testid="request-summary" data-status={highlighted.status}>
             <p>
               <span className="font-medium capitalize">{highlighted.status}</span>
-              <span className="text-slate-500"> · raised {highlighted.created_at.slice(0, 10)}</span>
+              <span className="text-slate-500"> · raised {formatDate(highlighted.created_at)}</span>
               {highlighted.resolved_at === null ? null : (
-                <span className="text-slate-500"> · resolved {highlighted.resolved_at.slice(0, 10)}</span>
+                <span className="text-slate-500"> · resolved {formatDate(highlighted.resolved_at)}</span>
               )}
             </p>
             {summary === null ? (
@@ -246,13 +294,13 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
 
       <article className="flex flex-col gap-3" data-testid="edit-access">
         <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">Edit access</h2>
-        {editorIds.length === 0 ? (
+        {allEditorIds.length === 0 ? (
           <p className="text-sm text-slate-500">
-            No hierarchy role grants edit access to this member — administrators only.
+            No hierarchy role grants edit access to this user — administrators only.
           </p>
         ) : (
           <ul className="flex flex-col gap-1 text-sm">
-            {editorIds.map((editorId) => {
+            {allEditorIds.map((editorId) => {
               const editor = related.get(editorId);
               return (
                 <li key={editorId} data-testid="editor">

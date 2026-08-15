@@ -12,7 +12,9 @@
  * 1. **Scope is an input, not a filter applied afterwards.** Each function takes
  *    the employee ids the viewer may see (§G8 `visibleEmployees`) and aggregates
  *    only those. A total that included people the viewer cannot open is a leak,
- *    however coarse.
+ *    however coarse. There is exactly ONE way to obtain an unscoped set —
+ *    `allEmployeeIds` — it is named so it cannot be reached for absent-mindedly,
+ *    and its only caller gates it behind the `show_org_wide_kpis` flag.
  * 2. **Sums are exact.** Money is added with `sumMinorUnits` (BigInt over decimal
  *    strings, §G9). Floating point appears only in *ratios* — which is the same
  *    concession `spendRatio` already makes, and only ever drives sort order and
@@ -462,4 +464,85 @@ export function topSpenders(
   return rows
     .sort((a, b) => compareMinorUnits(b.amount, a.amount) || a.name.localeCompare(b.name))
     .slice(0, n);
+}
+
+/* -------------------------------------------------------------------------- */
+/* 5. Month-to-date headline figures                                          */
+/* -------------------------------------------------------------------------- */
+
+export interface MonthToDateSummary {
+  /** Exact sum of the month's daily cost across the set, minor units. */
+  total: string;
+  /** How many people the total is spread over — the whole set, not the spenders. */
+  headcount: number;
+  /** `total ÷ headcount`, minor units. `"0"` for an empty set. */
+  average: string;
+}
+
+/** Fraction digits kept on an average; `user_daily_cost` stores six. */
+const AVERAGE_PRECISION = 6;
+
+/**
+ * Decimal minor units from a JS number, without exponent notation.
+ *
+ * The only float in this module's output. `toFixed` is what keeps a very small
+ * or very large quotient from serialising as `1e-7` — the money helpers reject
+ * that, and a headline card is a poor place to discover it.
+ */
+function toMinorUnitsString(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  const fixed = value.toFixed(AVERAGE_PRECISION);
+  const [whole = "0", fraction = ""] = fixed.split(".");
+  const trimmed = fraction.replace(/0+$/, "");
+  return trimmed === "" ? whole : `${whole}.${trimmed}`;
+}
+
+/**
+ * Total and per-head average spend for a set of employees, month to date.
+ *
+ * The window is `monthStart(now)` through today — the same one {@link topSpenders}
+ * uses, so the headline number and the bar list underneath it can be reconciled
+ * by hand.
+ *
+ * **The average divides by the whole set, including people who spent nothing.**
+ * Dividing by "people with cost rows" would make the figure drift as light users
+ * enter and leave the window, and would make an organization average and a team
+ * average incomparable — which is the entire point of showing them side by side.
+ */
+export function monthToDateTotal(
+  db: AppDatabase,
+  employeeIds: readonly string[],
+  options: WindowOptions = {},
+): MonthToDateSummary {
+  const now = resolveNow(options);
+  const scope = resolveScope(db, employeeIds);
+  const headcount = scope.length;
+
+  const total = sumMinorUnits(
+    costRows(db, userIdsOf(scope), monthStart(now), toIsoDate(now)).map((row) => row.amount),
+  );
+
+  return {
+    total,
+    headcount,
+    average: headcount === 0 ? "0" : toMinorUnitsString(minorUnitsToNumber(total) / headcount),
+  };
+}
+
+/**
+ * Every employee id in the roster — the one deliberately UNSCOPED accessor.
+ *
+ * Everything else in this module takes the viewer's scope as an input precisely
+ * so that "unscoped" is not expressible by accident (see the module header,
+ * rule 1). The organization-wide KPI cards are the single exception, and this
+ * function exists so that exception has exactly one name, one call site, and a
+ * config flag in front of it (`show_org_wide_kpis`). Do not reach for it to
+ * widen anything that names a person.
+ */
+export function allEmployeeIds(db: AppDatabase): string[] {
+  return db
+    .select({ id: employees.id })
+    .from(employees)
+    .all()
+    .map((row) => row.id);
 }

@@ -27,7 +27,7 @@ interface NavItem {
 }
 
 const ITEMS: NavItem[] = [
-  { href: "/", label: "Members" },
+  { href: "/members", label: "Users" },
   { href: "/requests", label: "Requests" },
   { href: "/analytics", label: "Analytics" },
   { href: "/admin", label: "Admin", adminOnly: true },
@@ -43,7 +43,6 @@ export interface NavProps {
 }
 
 function isActive(pathname: string, href: string): boolean {
-  if (href === "/") return pathname === "/" || pathname.startsWith("/members");
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

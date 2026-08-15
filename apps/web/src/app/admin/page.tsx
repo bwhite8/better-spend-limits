@@ -1,14 +1,17 @@
 /**
- * Admin — the four things only an administrator can do (plan §Phase 13).
+ * Admin — the five things only an administrator can do (plan §Phase 13, §Phase 9).
  *
  *   1. **Settings** decide who may edit whose limit (§G8) and how the reports
  *      and the sync behave.
- *   2. **Import** replaces the employee roster, which is where those permissions
+ *   2. **AI lead delegation** grants a lead a leader's hierarchy scope. It is
+ *      the second permission control on the page, and unlike the first it is
+ *      per-person rather than org-wide.
+ *   3. **Import** replaces the employee roster, which is where those permissions
  *      come from in the first place.
- *   3. **Audit log** is the record of every write the app has made on somebody's
- *      behalf — including the two above.
- *   4. **Unmatched members** are the people the API knows about and the roster
- *      does not, which is the failure mode 1–3 quietly produce.
+ *   4. **Audit log** is the record of every write the app has made on somebody's
+ *      behalf — including the three above.
+ *   5. **Unmatched members** are the people the API knows about and the roster
+ *      does not, which is the failure mode 1–4 quietly produce.
  *
  * They are one page rather than four subroutes because they are read together:
  * an admin looking at an unmatched member is about to change the roster, and an
@@ -22,12 +25,14 @@
 
 import { getDb } from "@/db/client";
 import { employees } from "@/db/schema";
+import { aiLeadDirectory } from "@/lib/ai-leads";
 import { loadAppConfig } from "@/lib/config";
 import { currentEmployee } from "@/lib/identity";
 import { getSyncState } from "@/lib/sync";
 import { ensureFreshSync } from "@/lib/sync-runner";
 
 import Forbidden from "../forbidden";
+import { AiLeads } from "./ai-leads";
 import { loadAuditPage, parseAuditPageParam } from "./audit-query";
 import { AuditTable } from "./audit-table";
 import { ConfigForm } from "./config-form";
@@ -84,6 +89,7 @@ export default async function AdminPage({
     db.select({ id: employees.id, name: employees.name }).from(employees).all().map((row) => [row.id, row.name]),
   );
   const unmatched = unmatchedMembers(db);
+  const aiLeads = aiLeadDirectory(db);
   const effectiveSyncedAt = getSyncState(db, "effective")?.last_synced_at ?? null;
 
   return (
@@ -104,6 +110,14 @@ export default async function AdminPage({
       </Section>
 
       <Section
+        id="ai-leads"
+        title="AI lead delegation"
+        caption="An AI lead sees and edits exactly what the leaders assigned to them do — those leaders' people, never the leaders themselves, and never admin rights."
+      >
+        <AiLeads leads={aiLeads.leads} leaders={aiLeads.leaders} />
+      </Section>
+
+      <Section
         id="import"
         title="Employee import"
         caption="The roster normally comes from an HRIS export. This replaces it wholesale."
@@ -121,8 +135,8 @@ export default async function AdminPage({
 
       <Section
         id="unmatched"
-        title="Unmatched members"
-        caption="Anthropic members whose email address is on no employee record."
+        title="Unmatched users"
+        caption="Anthropic users whose email address is on no employee record."
       >
         <UnmatchedMembers rows={unmatched} syncedAt={effectiveSyncedAt} />
       </Section>

@@ -120,6 +120,38 @@ describe("formatMoney", () => {
     expect(formatMoney("50000", "GBP")).toBe("£500.00");
     expect(formatMoney("50000", "XYZ")).toBe("XYZ 500.00");
   });
+
+  it("keeps the cents unless trimWholeDollars is asked for", () => {
+    expect(formatMoney("50000")).toBe("$500.00");
+    expect(formatMoney("50000", "USD")).toBe("$500.00");
+    expect(formatMoney("50000", "USD", {})).toBe("$500.00");
+    expect(formatMoney("50000", "USD", { trimWholeDollars: false })).toBe("$500.00");
+  });
+
+  it("trims .00 from whole-dollar amounts on request", () => {
+    expect(formatMoney("50000", "USD", { trimWholeDollars: true })).toBe("$500");
+    expect(formatMoney("0", "USD", { trimWholeDollars: true })).toBe("$0");
+    expect(formatMoney("150000", "USD", { trimWholeDollars: true })).toBe("$1,500");
+    expect(formatMoney("50000", "EUR", { trimWholeDollars: true })).toBe("€500");
+    expect(formatMoney("50000", "XYZ", { trimWholeDollars: true })).toBe("XYZ 500");
+  });
+
+  it("keeps the cents on a trimmed amount that is not whole dollars", () => {
+    expect(formatMoney("1234", "USD", { trimWholeDollars: true })).toBe("$12.34");
+    expect(formatMoney("5", "USD", { trimWholeDollars: true })).toBe("$0.05");
+    expect(formatMoney("50001", "USD", { trimWholeDollars: true })).toBe("$500.01");
+  });
+
+  it("trims only after rounding, so fractional cents cannot leave a stray .00", () => {
+    // 49999.6 rounds up to 50000 minor units, which IS whole dollars.
+    expect(formatMoney("49999.6", "USD", { trimWholeDollars: true })).toBe("$500");
+    // 31402.5 rounds to 31403, which is not.
+    expect(formatMoney("31402.5", "USD", { trimWholeDollars: true })).toBe("$314.03");
+  });
+
+  it("still renders null as Unlimited when trimming", () => {
+    expect(formatMoney(null, "USD", { trimWholeDollars: true })).toBe("Unlimited");
+  });
 });
 
 describe("dollarsInputToMinorUnits", () => {
