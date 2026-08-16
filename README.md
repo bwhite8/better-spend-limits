@@ -145,7 +145,7 @@ docker compose down -v         # -v also drops the SQLite volume
 
 This is the demo profile — no credentials, talks to the mock over the compose network. For production see [above](#production-deployment) and `docker-compose.prod.yml`, which has no mock service at all.
 
-The [hosted sandbox](https://better-spend-limits-production.up.railway.app) is this same demo profile on Railway, as two services (`Dockerfile.web` + `Dockerfile.mock`) with no real Anthropic key anywhere. `AUTH_MODE=dev` there is fine only because everything behind it is fixture data — don't use it as a deployment template.
+The [hosted sandbox](https://better-spend-limits-production.up.railway.app) is this same demo profile on Railway — `Dockerfile.web` + `Dockerfile.mock`, plus a tiny `Dockerfile.reset` cron that restores the synthetic org on a schedule — with no real Anthropic key anywhere. `AUTH_MODE=dev` there is fine only because everything behind it is fixture data and anyone's edits are wiped on the next reset; don't use it as a deployment template. It has no auth of its own, so the public build also caps imports, rate-limits writes, and bounds the audit log — see the hardening in `apps/web/src/lib/rate-limit.ts` and `import-employees.ts`.
 
 ## Security posture
 
