@@ -41,6 +41,9 @@ import { UnmatchedMembers, unmatchedMembers } from "./unmatched";
 
 export const dynamic = "force-dynamic";
 
+/** Matches the elevated-surface token used on Analytics (globals.css `body`). */
+const CARD = "rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900";
+
 function Section({
   id,
   title,
@@ -53,7 +56,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <article id={id} className="flex scroll-mt-6 flex-col gap-4">
+    <article id={id} className={`${CARD} flex scroll-mt-6 flex-col gap-4 p-4 sm:p-5`}>
       <header className="flex flex-col gap-0.5">
         <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">{title}</h2>
         <p className="text-xs text-slate-500">{caption}</p>
@@ -119,7 +122,7 @@ export default async function AdminPage({
             <a
               key={item.href}
               href={item.href}
-              className="rounded border border-slate-200 px-2 py-1 text-slate-600 hover:bg-slate-100 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800"
+              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-slate-600 shadow-sm hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800"
             >
               {item.label}
             </a>

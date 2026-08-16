@@ -89,7 +89,14 @@ export function SpendBar({ spend, amount, currency, className }: SpendBarProps) 
   const spendUnavailable = spend !== null && isZeroMinorUnits(spend);
 
   return (
-    <span className={`inline-flex items-center gap-2 ${className ?? ""}`} data-testid="spend-bar">
+    // `flex-wrap`: in a narrow table column (the Analytics near-limit table on a
+    // phone) the bar and percentage drop below the amount instead of overflowing
+    // the cell and clipping the "%" off the edge of the screen. In a roomy
+    // container — the members cards, a request card — everything stays on one row.
+    <span
+      className={`inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 ${className ?? ""}`}
+      data-testid="spend-bar"
+    >
       <span className="tabular-nums">
         <Money amount={spend} currency={currency} />
       </span>

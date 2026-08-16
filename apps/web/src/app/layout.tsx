@@ -14,7 +14,10 @@ import { ensureFreshSync } from "@/lib/sync-runner";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "better-spend-limits",
+  title: {
+    default: "Spend Limits",
+    template: "%s · Spend Limits",
+  },
   description: "A UI for the Claude Spend Limits and Analytics APIs.",
 };
 

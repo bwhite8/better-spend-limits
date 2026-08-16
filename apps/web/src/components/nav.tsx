@@ -64,11 +64,25 @@ export function Nav({ isAdmin, currentUser, switcher, sync }: NavProps) {
     // Playwright's strict-mode `getByTestId` at every viewport, desktop included.
     <nav
       data-testid="nav"
-      className="sticky top-0 z-20 flex w-full shrink-0 flex-col gap-3 border-b border-slate-200 bg-slate-50 p-3 md:static md:h-full md:w-60 md:gap-6 md:overflow-y-auto md:border-r md:border-b-0 md:p-4 dark:border-slate-800 dark:bg-slate-900"
+      className="sticky top-0 z-20 flex w-full shrink-0 flex-col gap-3 border-b border-slate-200 bg-white p-3 md:static md:h-full md:w-60 md:gap-6 md:overflow-y-auto md:border-r md:border-b-0 md:p-4 dark:border-slate-800 dark:bg-slate-900"
     >
       <div className="flex items-center justify-between">
-        <Link href="/" className="font-mono text-sm font-semibold tracking-tight">
-          better-spend-limits
+        <Link href="/" aria-label="Spend Limits — home" className="flex items-center gap-2">
+          {/*
+            The mark echoes the SpendBar: a track, a fill, and the limit line the
+            fill approaches. `currentColor` is not used — it is filled from the
+            `--color-brand-600` design token so a rebrand (globals.css §@theme)
+            recolors the logo for free, exactly as it recolors every accent.
+          */}
+          <svg viewBox="0 0 32 32" aria-hidden="true" className="h-6 w-6 shrink-0">
+            <rect width="32" height="32" rx="8" fill="var(--color-brand-600)" />
+            <rect x="6.5" y="14.4" width="19" height="3.2" rx="1.6" fill="#fff" opacity="0.35" />
+            <rect x="6.5" y="14.4" width="11.5" height="3.2" rx="1.6" fill="#fff" />
+            <rect x="22.4" y="9" width="2.6" height="14" rx="1.3" fill="#fff" />
+          </svg>
+          <span className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+            Spend Limits
+          </span>
         </Link>
         <button
           type="button"

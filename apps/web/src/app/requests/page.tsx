@@ -90,7 +90,7 @@ function RequestCard({ entry, prefillDollars, suppressDefault }: CardProps) {
       data-request-id={entry.id}
       data-status={entry.status}
       data-actionable={entry.actionable}
-      className="flex flex-col gap-3 rounded border border-slate-200 p-4 dark:border-slate-800"
+      className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">

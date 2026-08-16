@@ -546,7 +546,12 @@ export function MembersTable({
         </p>
       ) : (
         <>
-          <div className="md:overflow-x-auto">
+          {/*
+            A panel on desktop; on mobile each row is already its own card
+            (see `MemberTableRow`), so the wrapper stays flat there to avoid a
+            card-inside-a-card.
+          */}
+          <div className="md:overflow-x-auto md:rounded-xl md:border md:border-slate-200 md:bg-white md:shadow-sm dark:md:border-slate-800 dark:md:bg-slate-900">
             <table className="block w-full border-collapse text-sm md:table">
               <thead className="hidden md:table-header-group">
                 <tr className="border-b border-slate-200 text-left dark:border-slate-800">
@@ -561,7 +566,7 @@ export function MembersTable({
                   ))}
                 </tr>
               </thead>
-              <tbody className="block md:table-row-group">
+              <tbody className="block md:table-row-group md:[&>tr:last-child]:border-b-0">
                 {shown.map((row) => (
                   <MemberTableRow key={row.id} row={row} />
                 ))}

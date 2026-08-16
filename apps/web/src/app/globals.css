@@ -78,5 +78,11 @@
 }
 
 body {
-  @apply bg-white text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+  /*
+   * A slate canvas rather than pure white: white surfaces (cards, the sidebar,
+   * paneled tables) read as elevated against it. Pure white leaves every card
+   * invisible except for its hairline border. Dark mode already had this
+   * figure/ground separation (slate-950 canvas, slate-900 panels).
+   */
+  @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
 }

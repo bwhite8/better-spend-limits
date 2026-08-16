@@ -61,6 +61,13 @@ const WOW_MULTIPLE = 3;
 /** Rows in the month-to-date bar list. */
 const TOP_SPENDER_COUNT = 10;
 
+/**
+ * The elevated-surface token. A white panel with a soft shadow that reads as
+ * lifted off the slate canvas (globals.css `body`). Inlined as a string rather
+ * than a component so a plain `<article>`/`<div>` can opt in without a wrapper.
+ */
+const CARD = "rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900";
+
 function Section({
   title,
   caption,
@@ -71,7 +78,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <article className="flex flex-col gap-3">
+    <article className={`${CARD} flex flex-col gap-3 p-4 sm:p-5`}>
       <header className="flex flex-col gap-0.5">
         <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">{title}</h2>
         {caption === undefined ? null : <p className="text-xs text-slate-500">{caption}</p>}
@@ -99,10 +106,7 @@ interface Kpi {
  */
 function KpiCard({ testId, label, caption, amount }: Kpi) {
   return (
-    <div
-      data-testid="kpi-card"
-      className="flex flex-col gap-1 rounded-lg border border-slate-200 px-4 py-3 dark:border-slate-800"
-    >
+    <div data-testid="kpi-card" className={`${CARD} flex flex-col gap-1 px-4 py-3`}>
       <h2 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">{label}</h2>
       <p data-testid={testId} className="text-xl font-semibold tabular-nums">
         <Money amount={amount} />
@@ -164,10 +168,18 @@ function NearLimitTable({ rows }: { rows: NearLimitRow[] }) {
     <div className="overflow-x-auto">
       <table data-testid="near-limit-table" className="w-full border-collapse text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-left dark:border-slate-800">
-            {["User", "Limit", "Period-to-date spend"].map((header) => (
-              <th key={header} scope="col" className="px-2 py-2 font-medium text-slate-500">
-                {header}
+          <tr className="border-b border-slate-200 dark:border-slate-800">
+            {[
+              { label: "User", align: "text-left" },
+              { label: "Limit", align: "text-right" },
+              { label: "Period-to-date spend", align: "text-left" },
+            ].map((header) => (
+              <th
+                key={header.label}
+                scope="col"
+                className={`px-2 py-2 font-medium text-slate-500 ${header.align}`}
+              >
+                {header.label}
               </th>
             ))}
           </tr>
@@ -192,7 +204,7 @@ function NearLimitTable({ rows }: { rows: NearLimitRow[] }) {
                   </span>
                 ) : null}
               </td>
-              <td className="px-2 py-2 tabular-nums">
+              <td className="px-2 py-2 text-right font-medium tabular-nums">
                 <Money amount={row.amount} currency={row.currency} />
               </td>
               {/* `SpendBar` already renders the ratio (§Phase 9), so this table
@@ -213,10 +225,19 @@ function MoversTable({ rows }: { rows: WowMoverRow[] }) {
     <div className="overflow-x-auto">
       <table data-testid="wow-table" className="w-full border-collapse text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-left dark:border-slate-800">
-            {["User", "Last 7 days", "Previous 7 days", "Change"].map((header) => (
-              <th key={header} scope="col" className="px-2 py-2 font-medium text-slate-500">
-                {header}
+          <tr className="border-b border-slate-200 dark:border-slate-800">
+            {[
+              { label: "User", align: "text-left" },
+              { label: "Last 7 days", align: "text-right" },
+              { label: "Previous 7 days", align: "text-right" },
+              { label: "Change", align: "text-right" },
+            ].map((header) => (
+              <th
+                key={header.label}
+                scope="col"
+                className={`px-2 py-2 font-medium text-slate-500 ${header.align}`}
+              >
+                {header.label}
               </th>
             ))}
           </tr>
@@ -232,13 +253,16 @@ function MoversTable({ rows }: { rows: WowMoverRow[] }) {
               <td className="px-2 py-2">
                 <MemberLink employeeId={row.employeeId} name={row.name} testId="wow-link" />
               </td>
-              <td className="px-2 py-2 tabular-nums">
+              <td className="px-2 py-2 text-right font-medium tabular-nums">
                 <Money amount={row.lastWeek} />
               </td>
-              <td className="px-2 py-2 tabular-nums">
+              <td className="px-2 py-2 text-right tabular-nums text-slate-500">
                 <Money amount={row.priorWeek} />
               </td>
-              <td className="px-2 py-2 tabular-nums" data-testid="wow-multiple">
+              <td
+                className="px-2 py-2 text-right font-medium tabular-nums"
+                data-testid="wow-multiple"
+              >
                 {row.multiple === null ? "new spend" : `${row.multiple.toFixed(1)}×`}
               </td>
             </tr>
