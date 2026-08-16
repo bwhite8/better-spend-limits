@@ -18,6 +18,8 @@ import { useTransition } from "react";
 
 import { setImpersonation } from "@/lib/identity-actions";
 
+import { FIELD_LABEL, SELECT } from "./controls";
+
 // Values, not just types: `SWITCHER_GROUPS` must NOT be re-exported from this
 // module. Anything exported from a `"use client"` file becomes a client
 // reference on the server, and the layout needs the real array.
@@ -43,7 +45,7 @@ export function UserSwitcher({ options, currentEmail }: UserSwitcherProps) {
 
   return (
     <div className="flex flex-col gap-1" data-testid="user-switcher-root" data-pending={pending}>
-      <label htmlFor="user-switcher" className="text-xs font-medium tracking-wide text-slate-500 uppercase">
+      <label htmlFor="user-switcher" className={`${FIELD_LABEL} tracking-wide uppercase`}>
         Viewing as
       </label>
       <select
@@ -52,7 +54,7 @@ export function UserSwitcher({ options, currentEmail }: UserSwitcherProps) {
         value={currentEmail ?? ""}
         disabled={pending}
         onChange={(event) => handleChange(event.target.value)}
-        className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+        className={`${SELECT} w-full`}
       >
         <option value="" disabled>
           Choose a user…
@@ -66,9 +68,13 @@ export function UserSwitcher({ options, currentEmail }: UserSwitcherProps) {
           if (members.length === 0) return null;
           return (
             <optgroup key={group} label={`${group} (${members.length})`}>
+              {/* Name only. The address used to be appended here and a 240px
+                  rail simply truncated it mid-word — the identity block
+                  directly above already names the current user's email, so the
+                  second copy was buying a clipped string and nothing else. */}
               {members.map((option) => (
                 <option key={option.email} value={option.email}>
-                  {option.name} — {option.email}
+                  {option.name}
                 </option>
               ))}
             </optgroup>

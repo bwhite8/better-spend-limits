@@ -16,6 +16,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { button } from "./controls";
 import { SyncStatus, type SyncStatusProps } from "./sync-status";
 import type { SwitcherOption } from "./switcher-groups";
 import { UserSwitcher } from "./user-switcher";
@@ -64,7 +65,10 @@ export function Nav({ isAdmin, currentUser, switcher, sync }: NavProps) {
     // Playwright's strict-mode `getByTestId` at every viewport, desktop included.
     <nav
       data-testid="nav"
-      className="sticky top-0 z-20 flex w-full shrink-0 flex-col gap-3 border-b border-slate-200 bg-white p-3 md:static md:h-full md:w-60 md:gap-6 md:overflow-y-auto md:border-r md:border-b-0 md:p-4 dark:border-slate-800 dark:bg-slate-900"
+      // `md:w-56` rather than 60: four links do not need 240px, and every pixel
+      // the rail gives back goes to the table beside it — which at the `md`
+      // breakpoint is working with under 500px.
+      className="sticky top-0 z-20 flex w-full shrink-0 flex-col gap-3 border-b border-slate-200 bg-white p-3 md:static md:h-full md:w-56 md:gap-6 md:overflow-y-auto md:border-r md:border-b-0 md:p-4 lg:w-60 dark:border-slate-800 dark:bg-slate-900"
     >
       <div className="flex items-center justify-between">
         <Link href="/" aria-label="Spend Limits — home" className="flex items-center gap-2">
@@ -90,7 +94,7 @@ export function Nav({ isAdmin, currentUser, switcher, sync }: NavProps) {
           aria-expanded={statusOpen}
           aria-controls="nav-status"
           data-testid="nav-status-toggle"
-          className="rounded border border-slate-300 px-2 py-1 text-xs md:hidden dark:border-slate-700"
+          className={`${button("secondary", "sm")} md:hidden`}
         >
           {statusOpen ? "Hide" : "Status"}
         </button>
@@ -103,10 +107,14 @@ export function Nav({ isAdmin, currentUser, switcher, sync }: NavProps) {
               href={item.href}
               data-testid={`nav-link-${item.label.toLowerCase()}`}
               aria-current={isActive(pathname, item.href) ? "page" : undefined}
-              className={`block rounded px-2 py-1 text-sm whitespace-nowrap ${
+              // The active row is brand-tinted rather than grey. A grey pill on
+              // a grey-on-white rail says "disabled" as readily as it says
+              // "you are here"; the accent is the only thing on the page that
+              // can only mean the second.
+              className={`block rounded-lg px-2.5 py-2 text-sm whitespace-nowrap transition-colors md:py-1.5 ${
                 isActive(pathname, item.href)
-                  ? "bg-slate-200 font-medium dark:bg-slate-800"
-                  : "hover:bg-slate-100 dark:hover:bg-slate-800"
+                  ? "bg-brand-50 font-medium text-brand-800 dark:bg-brand-950 dark:text-brand-200"
+                  : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
               }`}
             >
               {item.label}
@@ -115,20 +123,42 @@ export function Nav({ isAdmin, currentUser, switcher, sync }: NavProps) {
         ))}
       </ul>
 
+      {/*
+        Pinned to the bottom (`md:mt-auto`) with a rule above it, so the space
+        between the links and here reads as a deliberate gap between two groups
+        rather than as a rail that ran out of things to say. It was previously
+        520px of nothing with unanchored text floating at the end of it.
+      */}
       <div
         id="nav-status"
-        className={`flex-col gap-4 md:mt-auto md:flex ${statusOpen ? "flex" : "hidden"}`}
+        className={`flex-col gap-4 md:mt-auto md:flex md:border-t md:border-slate-200 md:pt-4 dark:md:border-slate-800 ${statusOpen ? "flex" : "hidden"}`}
       >
         {currentUser === null ? (
-          <p className="text-xs text-slate-500" data-testid="current-user">
+          <p className="text-xs text-slate-500 dark:text-slate-400" data-testid="current-user">
             Not signed in
           </p>
         ) : (
-          <p className="text-xs text-slate-500" data-testid="current-user" data-email={currentUser.email}>
-            <span className="block font-medium text-slate-700 dark:text-slate-300">{currentUser.name}</span>
-            {currentUser.email}
-            {isAdmin ? <span className="ml-1 font-medium text-brand-600">· admin</span> : null}
-          </p>
+          <div
+            className="flex items-start gap-2"
+            data-testid="current-user"
+            data-email={currentUser.email}
+          >
+            <span
+              aria-hidden="true"
+              className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-800 dark:bg-brand-950 dark:text-brand-200"
+            >
+              {currentUser.name.slice(0, 1).toUpperCase()}
+            </span>
+            <p className="min-w-0 text-xs text-slate-500 dark:text-slate-400">
+              <span className="block font-medium text-slate-700 dark:text-slate-200">
+                {currentUser.name}
+              </span>
+              <span className="block truncate">{currentUser.email}</span>
+              {isAdmin ? (
+                <span className="font-medium text-brand-700 dark:text-brand-300">admin</span>
+              ) : null}
+            </p>
+          </div>
         )}
 
         {sync === null ? null : <SyncStatus {...sync} />}

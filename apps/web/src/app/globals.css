@@ -86,3 +86,57 @@ body {
    */
   @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
 }
+
+/*
+ * ONE focus ring, for everything.
+ *
+ * Written here rather than as a class on each control for the same reason the
+ * accent scales live in `@theme`: a keyboard ring that some components remember
+ * and others forget is worse than none, because the reader cannot trust it.
+ * Left to itself the browser draws its own — Chrome's is a 1px system blue,
+ * which on an indigo-branded page reads as an accident. `:focus-visible` (not
+ * `:focus`) keeps it off mouse clicks.
+ *
+ * `outline` rather than a `ring`: outlines are painted outside the border box
+ * and never participate in layout, so a focused control in a table cell cannot
+ * shift its neighbours the way a box-shadow ring on a tight row can.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/*
+ * Native checkboxes, radios and range thumbs paint themselves in the operating
+ * system's accent — macOS blue — regardless of the brand. One line re-points
+ * every one of them at the same token the primary button uses.
+ */
+:root {
+  accent-color: var(--color-brand-600);
+}
+
+@layer components {
+  /*
+   * The disclosure chevron for a single-select.
+   *
+   * `appearance: none` removes the platform arrow, which is the loudest
+   * remaining piece of unstyled browser chrome in the app, and this draws a
+   * replacement in slate-400 — legible on both the white and the slate-900
+   * field. It lives in the components layer, below utilities, so a caller can
+   * still override any of it; `padding-right` is the one declaration a caller
+   * must NOT clobber, which is why `SELECT` in `components/controls.ts` sets
+   * only `pl-3` and leaves the right side to this rule.
+   *
+   * A `[multiple]` select is a list box, not a dropdown — it has no arrow to
+   * replace, so it is excluded rather than given a chevron it cannot honour.
+   */
+  .select-chevron {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2394a3b8' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.625rem center;
+    background-size: 0.75rem 0.75rem;
+    padding-right: 2rem;
+  }
+}

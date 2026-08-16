@@ -19,6 +19,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
+import { button } from "./controls";
 import { syncLabel } from "./sync-label";
 
 export interface SyncStatusProps {
@@ -77,7 +78,7 @@ export function SyncStatus({ syncedAt, initialLabel, stale, errored }: SyncStatu
         onClick={refresh}
         disabled={pending}
         data-testid="sync-refresh"
-        className="inline-flex min-h-11 items-center justify-center rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 md:min-h-0 md:px-2 md:py-1 md:text-xs dark:border-slate-700 dark:hover:bg-slate-800"
+        className={`${button("secondary", "sm")} w-full`}
       >
         {pending ? "Refreshing…" : "Refresh"}
       </button>

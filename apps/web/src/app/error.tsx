@@ -14,6 +14,8 @@
 
 import { useEffect } from "react";
 
+import { button } from "@/components/controls";
+
 export default function Error({
   error,
   reset,
@@ -42,7 +44,7 @@ export default function Error({
           type="button"
           onClick={reset}
           data-testid="route-error-retry"
-          className="inline-flex min-h-11 items-center justify-center rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 md:min-h-0 md:py-1.5 dark:bg-slate-100 dark:text-slate-900"
+          className={button("primary")}
         >
           Try again
         </button>

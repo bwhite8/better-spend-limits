@@ -17,6 +17,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { button, CHECKBOX, FIELD } from "@/components/controls";
 import { EDIT_ROLE_VALUES, type AppConfigDefaults, type EditRole } from "@/db/config-defaults";
 
 import { updateConfig } from "./actions";
@@ -107,7 +108,7 @@ export function ConfigForm({ initial }: ConfigFormProps) {
                 disabled={pending}
                 data-testid={`config-role-${role}`}
                 onChange={(event) => toggleRole(role, event.target.checked)}
-                className="h-5 w-5 shrink-0 md:h-3.5 md:w-3.5"
+                className={CHECKBOX}
               />
               {ROLE_LABELS[role]}
             </label>
@@ -129,14 +130,17 @@ export function ConfigForm({ initial }: ConfigFormProps) {
             setResult(null);
             setThreshold(event.target.value);
           }}
-          className="w-32 rounded border border-slate-300 px-2 py-1 tabular-nums dark:border-slate-700 dark:bg-slate-900"
+          className={`${FIELD} w-32 tabular-nums`}
         />
         <span className="text-xs text-slate-500">
           The fraction of their cap at which somebody appears in the Analytics near-limit report.
         </span>
       </label>
 
-      <label className="flex items-center gap-2 text-sm">
+      {/* `items-start`: these two labels carry a second explanatory line, and
+          centring the box against a two-line block floated it between them,
+          level with neither. It lines up with the title it belongs to. */}
+      <label className="flex items-start gap-2 text-sm">
         <input
           type="checkbox"
           checked={suppress}
@@ -146,7 +150,7 @@ export function ConfigForm({ initial }: ConfigFormProps) {
             setResult(null);
             setSuppress(event.target.checked);
           }}
-          className="h-5 w-5 shrink-0 md:h-3.5 md:w-3.5"
+          className={`${CHECKBOX} mt-0.5`}
         />
         <span>
           <span className="font-medium">Suppress notifications by default</span>
@@ -170,7 +174,7 @@ export function ConfigForm({ initial }: ConfigFormProps) {
             setResult(null);
             setStaleAfter(event.target.value);
           }}
-          className="w-32 rounded border border-slate-300 px-2 py-1 tabular-nums dark:border-slate-700 dark:bg-slate-900"
+          className={`${FIELD} w-32 tabular-nums`}
         />
         <span className="text-xs text-slate-500">
           How old the local snapshot may get before a page view triggers a refresh. The
@@ -178,7 +182,10 @@ export function ConfigForm({ initial }: ConfigFormProps) {
         </span>
       </label>
 
-      <label className="flex items-center gap-2 text-sm">
+      {/* `items-start`: these two labels carry a second explanatory line, and
+          centring the box against a two-line block floated it between them,
+          level with neither. It lines up with the title it belongs to. */}
+      <label className="flex items-start gap-2 text-sm">
         <input
           type="checkbox"
           checked={orgKpis}
@@ -188,7 +195,7 @@ export function ConfigForm({ initial }: ConfigFormProps) {
             setResult(null);
             setOrgKpis(event.target.checked);
           }}
-          className="h-5 w-5 shrink-0 md:h-3.5 md:w-3.5"
+          className={`${CHECKBOX} mt-0.5`}
         />
         <span>
           <span className="font-medium">Show organization-wide spend on Analytics</span>
@@ -207,7 +214,7 @@ export function ConfigForm({ initial }: ConfigFormProps) {
           onClick={save}
           disabled={pending || localError !== null}
           data-testid="config-save"
-          className="inline-flex min-h-11 items-center justify-center rounded bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60 md:min-h-0 md:py-1.5"
+          className={button("primary")}
         >
           {pending ? "Saving…" : "Save settings"}
         </button>

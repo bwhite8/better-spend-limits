@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import { AmountInput, parseAmountInput } from "@/components/amount-input";
+import { button, CHECKBOX } from "@/components/controls";
 
 export interface RequestActionsProps {
   requestId: string;
@@ -151,7 +152,7 @@ export function RequestActions({
         disabled={pending}
         data-testid={testId}
         onChange={(event) => setSuppress(event.target.checked)}
-        className="h-5 w-5 shrink-0 md:h-3.5 md:w-3.5"
+        className={CHECKBOX}
       />
       Don&rsquo;t notify {requesterName}
     </label>
@@ -166,7 +167,7 @@ export function RequestActions({
             onClick={openApprove}
             disabled={pending}
             data-testid="approve-open"
-            className="inline-flex min-h-11 items-center justify-center rounded bg-success-600 px-3 py-2 text-sm font-medium text-white hover:bg-success-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
+            className={button("success", "sm")}
           >
             Approve
           </button>
@@ -175,7 +176,7 @@ export function RequestActions({
             onClick={openDeny}
             disabled={pending}
             data-testid="deny-open"
-            className="inline-flex min-h-11 items-center justify-center rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs dark:border-slate-600 dark:hover:bg-slate-800"
+            className={button("secondary", "sm")}
           >
             Deny
           </button>
@@ -191,7 +192,7 @@ export function RequestActions({
           onKeyDown={(event) => {
             if (event.key === "Escape" && !pending) setDialog(null);
           }}
-          className="flex flex-col gap-3 rounded border border-slate-300 p-3 dark:border-slate-700"
+          className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/40"
         >
           <h3 className="text-sm font-semibold">Approve at a new limit</h3>
           <AmountInput
@@ -211,7 +212,7 @@ export function RequestActions({
               onClick={approve}
               disabled={pending || minorUnits === null}
               data-testid="approve-confirm"
-              className="inline-flex min-h-11 items-center justify-center rounded bg-success-600 px-3 py-2 text-sm font-medium text-white hover:bg-success-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
+              className={button("success", "sm")}
             >
               {pending ? "Approving…" : "Approve"}
             </button>
@@ -220,7 +221,7 @@ export function RequestActions({
               onClick={() => setDialog(null)}
               disabled={pending}
               data-testid="approve-cancel"
-              className="inline-flex min-h-11 items-center justify-center rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs dark:border-slate-600 dark:hover:bg-slate-800"
+              className={button("secondary", "sm")}
             >
               Cancel
             </button>
@@ -239,7 +240,7 @@ export function RequestActions({
           onKeyDown={(event) => {
             if (event.key === "Escape" && !pending) setDialog(null);
           }}
-          className="flex flex-col gap-3 rounded border border-slate-300 p-3 focus:outline-none dark:border-slate-700"
+          className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 focus:outline-none dark:border-slate-700 dark:bg-slate-950/40"
         >
           <h3 className="text-sm font-semibold">Deny this request</h3>
           <p className="text-xs text-slate-600 dark:text-slate-400">
@@ -253,7 +254,7 @@ export function RequestActions({
               onClick={deny}
               disabled={pending}
               data-testid="deny-confirm"
-              className="inline-flex min-h-11 items-center justify-center rounded bg-danger-600 px-3 py-2 text-sm font-medium text-white hover:bg-danger-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
+              className={button("danger", "sm")}
             >
               {pending ? "Denying…" : "Deny request"}
             </button>
@@ -262,7 +263,7 @@ export function RequestActions({
               onClick={() => setDialog(null)}
               disabled={pending}
               data-testid="deny-cancel"
-              className="inline-flex min-h-11 items-center justify-center rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs dark:border-slate-600 dark:hover:bg-slate-800"
+              className={button("secondary", "sm")}
             >
               Cancel
             </button>

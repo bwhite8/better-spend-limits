@@ -22,6 +22,7 @@ import Link from "next/link";
 
 import { getDb } from "@/db/client";
 import { Money, SpendBar } from "@/components/money";
+import { CARD } from "@/components/surface";
 import { loadAppConfig } from "@/lib/config";
 import { minorUnitsToDollarsInput } from "@/lib/dollars";
 import { currentEmployee } from "@/lib/identity";
@@ -55,6 +56,14 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+/**
+ * One half of the segmented control.
+ *
+ * The count is a chip rather than a bare number beside the label: two tabs
+ * reading "Pending 6" and "Resolved 6" put four words on a line where two are
+ * the choice and two are data, and a reader scanning for the choice had to
+ * separate them themselves.
+ */
 function TabLink({ tab, current, label, count }: { tab: Tab; current: Tab; label: string; count: number }) {
   const active = tab === current;
   return (
@@ -63,13 +72,24 @@ function TabLink({ tab, current, label, count }: { tab: Tab; current: Tab; label
       data-testid={`tab-${tab}`}
       data-active={active}
       aria-current={active ? "page" : undefined}
-      className={`inline-flex min-h-11 items-center justify-center gap-1 rounded px-3 py-2 text-sm font-medium md:block md:min-h-0 md:py-1.5 ${
+      className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors md:min-h-9 md:py-1.5 ${
         active
-          ? "bg-brand-600 text-white"
-          : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+          ? "bg-brand-600 text-white shadow-xs"
+          : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
       }`}
     >
-      {label} <span data-testid={`tab-${tab}-count`}>{count}</span>
+      {label}
+      <span
+        data-testid={`tab-${tab}-count`}
+        // Opaque `brand-800` rather than a translucent white: white-on-white/20
+        // composites to 4.46:1 against brand-600, which is under AA for 12px
+        // text — and an alpha fill makes that impossible to read off the token.
+        className={`rounded px-1.5 py-0.5 text-xs tabular-nums ${
+          active ? "bg-brand-800" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+        }`}
+      >
+        {count}
+      </span>
     </Link>
   );
 }
@@ -90,7 +110,7 @@ function RequestCard({ entry, prefillDollars, suppressDefault }: CardProps) {
       data-request-id={entry.id}
       data-status={entry.status}
       data-actionable={entry.actionable}
-      className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+      className={`${CARD} flex flex-col gap-3 p-4`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
@@ -201,7 +221,12 @@ export default async function RequestsPage({
         </p>
       </header>
 
-      <nav className="flex items-center gap-1" aria-label="Request status">
+      {/* A segmented control rather than two loose links: the tray is what says
+          these two are one choice with two settings. */}
+      <nav
+        className="inline-flex w-fit items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+        aria-label="Request status"
+      >
         <TabLink tab="pending" current={current} label="Pending" count={queue.pending.length} />
         <TabLink tab="resolved" current={current} label="Resolved" count={queue.resolved.length} />
       </nav>
@@ -213,7 +238,11 @@ export default async function RequestsPage({
             : "No resolved increase requests in your scope."}
         </p>
       ) : (
-        <ul className="flex flex-col gap-3">
+        // Two up once there is room for two. A queue card holds a name, two
+        // figures and two buttons — about 450px of content — and one per row
+        // across a 1024px column left more than half of every card empty while
+        // pushing the sixth request below the fold.
+        <ul className="grid gap-4 xl:grid-cols-2">
           {entries.map((entry) => (
             <RequestCard
               key={entry.id}

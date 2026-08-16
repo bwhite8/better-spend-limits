@@ -13,6 +13,8 @@ import { useId, useState } from "react";
 
 import { dollarsInputToMinorUnits, MoneyFormatError } from "@bsl/shared";
 
+import { FIELD } from "./controls";
+
 export interface AmountInputProps {
   /** Initial dollar value, e.g. `"750.00"`. */
   defaultValue?: string;
@@ -105,7 +107,7 @@ export function AmountInput({
           aria-describedby={error === null ? undefined : `${inputId}-error`}
           data-testid="amount-input"
           onChange={(event) => handleChange(event.target.value)}
-          className="min-h-11 w-36 rounded border border-slate-300 px-2 py-2 text-sm md:min-h-0 md:py-1 dark:border-slate-600 dark:bg-slate-900"
+          className={`${FIELD} w-36 tabular-nums`}
         />
       </div>
       {error === null ? null : (

@@ -25,6 +25,7 @@
 
 import { getDb } from "@/db/client";
 import { employees } from "@/db/schema";
+import { button } from "@/components/controls";
 import { CARD } from "@/components/surface";
 import { aiLeadDirectory } from "@/lib/ai-leads";
 import { loadAppConfig } from "@/lib/config";
@@ -117,11 +118,7 @@ export default async function AdminPage({
             { href: "#audit", label: "Audit log" },
             { href: "#unmatched", label: "Unmatched" },
           ].map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-slate-600 shadow-sm hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800"
-            >
+            <a key={item.href} href={item.href} className={button("secondary", "sm")}>
               {item.label}
             </a>
           ))}

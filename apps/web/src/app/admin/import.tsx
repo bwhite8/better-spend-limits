@@ -19,6 +19,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 
+import { button } from "@/components/controls";
 import { EMPLOYEE_CSV_HEADER, parseEmployeeCsv, type ParsedEmployeeCsv } from "@/lib/import-employees";
 
 import { importEmployees } from "./actions";
@@ -113,7 +114,7 @@ export function EmployeeImport() {
         disabled={pending}
         data-testid="import-file"
         onChange={(event) => void choose(event.target.files?.[0])}
-        className="text-sm file:mr-3 file:rounded file:border-0 file:bg-brand-600 file:px-3 file:py-2.5 file:text-sm file:font-medium file:text-white md:file:py-1.5 hover:file:bg-brand-700"
+        className="text-sm text-slate-500 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-brand-600 file:px-3 file:py-2.5 file:text-sm file:font-medium file:text-white md:file:py-1.5 hover:file:bg-brand-700"
       />
 
       {preview === null ? null : (
@@ -143,7 +144,7 @@ export function EmployeeImport() {
           onClick={() => setConfirming(true)}
           disabled={pending || !importable || confirming}
           data-testid="import-begin"
-          className="inline-flex min-h-11 items-center justify-center rounded bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60 md:min-h-0 md:py-1.5"
+          className={button("primary")}
         >
           Replace roster…
         </button>
@@ -185,7 +186,7 @@ export function EmployeeImport() {
               onClick={confirm}
               disabled={pending}
               data-testid="import-confirm"
-              className="inline-flex min-h-11 items-center justify-center rounded bg-danger-600 px-3 py-2 text-sm font-medium text-white hover:bg-danger-700 disabled:opacity-60 md:min-h-0 md:py-1.5"
+              className={button("danger")}
             >
               {pending ? "Importing…" : "Replace all records"}
             </button>
@@ -194,7 +195,7 @@ export function EmployeeImport() {
               onClick={() => setConfirming(false)}
               disabled={pending}
               data-testid="import-cancel"
-              className="inline-flex min-h-11 items-center justify-center rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 md:min-h-0 md:py-1.5 dark:border-slate-600 dark:hover:bg-slate-800"
+              className={button("secondary")}
             >
               Cancel
             </button>

@@ -92,7 +92,13 @@ interface Kpi {
 }
 
 /**
- * One headline figure.
+ * One headline figure — a segment of the strip, no longer a card of its own.
+ *
+ * Two figures in two full-width cards spent the entire content column on one
+ * number each, which read as a page with nothing on it rather than as a page
+ * with two important things on it. Segments of a single panel are denser, and
+ * they also say the true thing about these numbers: they are one set to be
+ * compared, not two unrelated readings.
  *
  * Cents are kept: unlike the users list, where a column of round caps is scanned
  * rather than audited, these are sums somebody may well reconcile against the
@@ -100,9 +106,12 @@ interface Kpi {
  */
 function KpiCard({ testId, label, caption, amount }: Kpi) {
   return (
-    <div data-testid="kpi-card" className={`${CARD} flex flex-col gap-1 px-4 py-3`}>
+    <div
+      data-testid="kpi-card"
+      className="flex flex-col gap-1 bg-white px-4 py-4 dark:bg-slate-900"
+    >
       <h2 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">{label}</h2>
-      <p data-testid={testId} className="text-xl font-semibold tabular-nums">
+      <p data-testid={testId} className="text-2xl font-semibold tracking-tight tabular-nums">
         <Money amount={amount} />
       </p>
       <p className="text-xs text-slate-500">{caption}</p>
@@ -321,13 +330,18 @@ export default async function AnalyticsPage() {
         </p>
       </header>
 
+      {/*
+        The dividers are the 1px grid gap with the panel's border colour showing
+        through it, rather than a border on each segment. A grid rewraps — two
+        columns at `sm`, four at `lg` — and per-segment borders would need to
+        know which cells had become the first of a row at each breakpoint. The
+        gap knows already, at every width, for free.
+      */}
       <div
         data-testid="kpi-cards"
-        className={
-          kpis.length > 2
-            ? "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
-            : "grid grid-cols-1 gap-3 sm:grid-cols-2"
-        }
+        className={`grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 shadow-sm dark:border-slate-800 dark:bg-slate-800 ${
+          kpis.length > 2 ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-2"
+        }`}
       >
         {kpis.map((kpi) => (
           <KpiCard key={kpi.testId} {...kpi} />

@@ -25,6 +25,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { button, FIELD } from "@/components/controls";
 import type { AiLeadDirectory, AiLeadEntry, AiLeadPerson } from "@/lib/ai-leads";
 
 import { updateAiLeadAssignments } from "./actions";
@@ -88,7 +89,7 @@ function LeadRow({ lead, leaders }: { lead: AiLeadEntry; leaders: AiLeadPerson[]
                 setResult(null);
                 setSelected([...event.target.selectedOptions].map((option) => option.value));
               }}
-              className="w-full rounded border border-slate-300 px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className={`${FIELD} w-full`}
             >
               {leaders.map((leader) => (
                 <option key={leader.id} value={leader.id}>
@@ -103,7 +104,7 @@ function LeadRow({ lead, leaders }: { lead: AiLeadEntry; leaders: AiLeadPerson[]
             onClick={save}
             disabled={pending}
             data-testid="ai-lead-save"
-            className="inline-flex min-h-11 shrink-0 items-center justify-center rounded bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60 md:min-h-0 md:py-1.5"
+            className={button("primary")}
           >
             {pending ? "Saving…" : "Save delegation"}
           </button>

@@ -34,6 +34,7 @@ import { useMemo, useState, useTransition } from "react";
 import { minorUnitsToDollarsInput } from "@/lib/dollars";
 
 import { AmountInput, parseAmountInput } from "./amount-input";
+import { button, CHECKBOX, FIELD, FIELD_LABEL, SELECT } from "./controls";
 import { Money, SpendBar } from "./money";
 import { SourceBadge } from "./source-badge";
 
@@ -121,10 +122,14 @@ const NO_TIER_SELECTION: TierSelection = { tier2: "", tier3: "", tier4: "" };
 const HEADERS: { label: string; className?: string }[] = [
   { label: "Name" },
   { label: "Email", className: "hidden lg:table-cell" },
-  { label: "Limit" },
+  { label: "Limit", className: "text-right" },
   { label: "Source", className: "hidden lg:table-cell" },
   { label: "Period-to-date spend" },
   { label: "", className: "hidden lg:table-cell" },
+  // The actions column. Appended rather than inserted: `td:nth-child(3)` is how
+  // the suite addresses the Limit cell, and a column in the middle would
+  // renumber every one of those.
+  { label: "", className: "w-px" },
 ];
 
 /** Shared by every body cell: a card line on a phone, a table cell above `md`. */
@@ -158,13 +163,13 @@ function TierFilter({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="flex w-full flex-col gap-1 text-xs text-slate-500 sm:w-52">
+    <label className={`flex w-full flex-col gap-1 sm:w-52 ${FIELD_LABEL}`}>
       {label}
       <select
         value={value}
         data-testid={testId}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded border border-slate-300 px-2 py-1 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+        className={`${SELECT} w-full`}
       >
         <option value="">Anyone</option>
         {options.map((option) => (
@@ -186,8 +191,7 @@ function Pager({
   pageCount: number;
   onChange: (page: number) => void;
 }) {
-  const buttonClass =
-    "rounded border border-slate-300 px-2 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700";
+  const buttonClass = button("secondary", "sm");
 
   return (
     <nav
@@ -299,102 +303,119 @@ function InlineLimitEditor({ row }: { row: MemberRow }) {
     });
   };
 
-  const buttonClass =
-    "inline-flex min-h-11 items-center justify-center rounded px-2.5 py-1 text-sm font-medium md:min-h-0 md:py-0.5 md:text-xs";
-
-  if (!open) {
-    return (
-      <span className="inline-flex items-center gap-2 align-middle">
-        <button
-          type="button"
-          onClick={openEditor}
-          data-testid="member-edit-limit"
-          aria-label={`Edit the spend limit for ${row.name}`}
-          className={`${buttonClass} ml-2 border border-slate-300 hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-800`}
-        >
-          Edit
-        </button>
-        {saved ? (
-          <span
-            role="status"
-            data-testid="member-limit-saved"
-            className="text-xs font-medium text-success-700 dark:text-success-400"
-          >
-            Saved
-          </span>
-        ) : null}
-      </span>
-    );
-  }
-
   return (
-    <div
-      role="group"
-      aria-label={`Set the spend limit for ${row.name}`}
-      data-testid="member-limit-editor"
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && !pending) setOpen(false);
-      }}
-      className="mt-2 flex w-full flex-col gap-2 rounded border border-slate-300 p-2 text-left font-normal normal-nums md:w-64 dark:border-slate-700"
-    >
-      {row.hasPendingRequest ? (
-        <p
-          data-testid="member-pending-warning"
-          className="rounded border border-warn-300 bg-warn-50 px-2 py-1.5 text-xs text-warn-900 dark:border-warn-800 dark:bg-warn-950 dark:text-warn-200"
+    <span className="inline-flex items-center justify-end gap-2 align-middle">
+      {saved ? (
+        <span
+          role="status"
+          data-testid="member-limit-saved"
+          className="text-xs font-medium text-success-700 dark:text-success-400"
         >
-          {row.name} has a pending increase request — setting a limit here won&rsquo;t resolve it.
-        </p>
+          Saved
+        </span>
       ) : null}
 
-      <AmountInput
-        label="New limit (USD)"
-        defaultValue={prefill}
-        disabled={pending}
-        autoFocus
-        onValueChange={(value) => setMinorUnits(value)}
-      />
+      {/*
+        The trigger stays mounted while the editor is open. It is what the panel
+        is anchored to, and swapping it out for the panel is what used to make
+        the whole column jump as the cell changed width.
+      */}
+      <button
+        type="button"
+        onClick={open ? () => setOpen(false) : openEditor}
+        aria-expanded={open}
+        data-testid="member-edit-limit"
+        aria-label={`Edit the spend limit for ${row.name}`}
+        className={button("secondary", "sm")}
+      >
+        Edit
+      </button>
 
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={save}
-          disabled={pending || minorUnits === null}
-          data-testid="member-limit-save"
-          className={`${buttonClass} bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60`}
-        >
-          {pending ? "Saving…" : "Save"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          disabled={pending}
-          data-testid="member-limit-cancel"
-          className={`${buttonClass} border border-slate-300 hover:bg-slate-100 disabled:opacity-60 dark:border-slate-600 dark:hover:bg-slate-800`}
-        >
-          Cancel
-        </button>
-      </div>
+      {open ? (
+        /*
+          A POPOVER, not an expansion.
+          Opening this used to grow the row from 39px to 147px and shove every
+          row below it down the page — so the row you were about to edit next
+          was no longer under the cursor. Anchored absolutely to the actions
+          cell, it costs the table no height at all: it draws over the rows
+          below and gives them back untouched on close.
 
-      {row.sourceType === OVERRIDE_SOURCE_TYPE ? (
-        <p className="text-xs text-slate-500">
-          To remove the override instead, open{" "}
-          <Link
-            href={`/members/${row.id}`}
-            data-testid="member-editor-detail-link"
-            className="underline"
-          >
-            {row.name}&rsquo;s page
-          </Link>
-          .
-        </p>
+          It stays a DOM descendant of the `<tr>`, which is what keeps
+          `row.getByTestId("member-limit-editor")` addressing the right row's
+          editor in the suite. `md:overflow-x-auto` came off the table wrapper
+          for this — an overflow container would have clipped the panel at the
+          card's edge.
+        */
+        <div
+          role="group"
+          aria-label={`Set the spend limit for ${row.name}`}
+          data-testid="member-limit-editor"
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && !pending) setOpen(false);
+          }}
+          className="absolute top-full right-0 z-30 mt-1 flex w-72 max-w-[calc(100vw-2rem)] flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left font-normal normal-nums shadow-lg dark:border-slate-700 dark:bg-slate-900"
+        >
+          {row.hasPendingRequest ? (
+            <p
+              data-testid="member-pending-warning"
+              className="rounded-lg border border-warn-300 bg-warn-50 px-2 py-1.5 text-xs text-warn-900 dark:border-warn-800 dark:bg-warn-950 dark:text-warn-200"
+            >
+              {row.name} has a pending increase request — setting a limit here won&rsquo;t resolve
+              it.
+            </p>
+          ) : null}
+
+          <AmountInput
+            label="New limit (USD)"
+            defaultValue={prefill}
+            disabled={pending}
+            autoFocus
+            onValueChange={(value) => setMinorUnits(value)}
+          />
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={save}
+              disabled={pending || minorUnits === null}
+              data-testid="member-limit-save"
+              className={button("primary", "sm")}
+            >
+              {pending ? "Saving…" : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              disabled={pending}
+              data-testid="member-limit-cancel"
+              className={button("secondary", "sm")}
+            >
+              Cancel
+            </button>
+          </div>
+
+          {row.sourceType === OVERRIDE_SOURCE_TYPE ? (
+            <p className="text-xs text-slate-500">
+              To remove the override instead, open{" "}
+              <Link
+                href={`/members/${row.id}`}
+                data-testid="member-editor-detail-link"
+                className="underline"
+              >
+                {row.name}&rsquo;s page
+              </Link>
+              .
+            </p>
+          ) : null}
+
+          {error === null ? null : (
+            <p role="alert" data-testid="member-limit-error" className="text-xs text-danger-600">
+              {error}
+            </p>
+          )}
+        </div>
       ) : null}
-
-      {error === null ? null : (
-        <p role="alert" data-testid="member-limit-error" className="text-xs text-danger-600">
-          {error}
-        </p>
-      )}
-    </div>
+    </span>
   );
 }
 
@@ -403,7 +424,10 @@ function MemberTableRow({ row }: { row: MemberRow }) {
     <tr
       data-testid="member-row"
       data-employee-id={row.id}
-      className="mb-3 block rounded-lg border border-slate-200 p-2 md:mb-0 md:table-row md:rounded-none md:border-0 md:border-b md:border-slate-100 md:p-0 md:hover:bg-slate-50 dark:border-slate-800 dark:md:border-slate-800 dark:md:hover:bg-slate-900"
+      // `relative` below `md` only: it is what the actions cell pins itself to
+      // in the card layout (see the last cell). At `md`+ the row is a table row
+      // again and positioning it would take it out of the table's own layout.
+      className="relative mb-3 block rounded-lg border border-slate-200 p-2 md:static md:mb-0 md:table-row md:rounded-none md:border-0 md:border-b md:border-slate-100 md:p-0 md:hover:bg-slate-50 dark:border-slate-800 dark:md:border-slate-800 dark:md:hover:bg-slate-900"
     >
       <td className={CELL}>
         <Link
@@ -415,20 +439,24 @@ function MemberTableRow({ row }: { row: MemberRow }) {
         </Link>
       </td>
 
-      <td className={`${WIDE_ONLY_CELL} text-slate-500`}>{row.email}</td>
+      {/* Capped and truncated: an address is identifying, not something anyone
+          reads to the end, and left uncapped the longest one on the page set
+          the column width — which is what made the table need a sideways
+          scrollbar at `lg` in the first place. */}
+      <td className={`${WIDE_ONLY_CELL} text-slate-500`}>
+        <span className="block max-w-60 truncate" title={row.email}>
+          {row.email}
+        </span>
+      </td>
 
-      <td className={`${CELL} tabular-nums`}>
+      <td className={`${CELL} font-medium tabular-nums md:text-right`}>
         {/* The card layout has no header row, so each value names itself. */}
-        <span className="mr-2 text-xs text-slate-500 md:hidden">Limit</span>
+        <span className="mr-2 text-xs font-normal text-slate-500 md:hidden">Limit</span>
         {row.synced ? (
           <Money amount={row.amount} currency={row.currency} trimWholeDollars />
         ) : (
-          <span className="text-slate-400">Not synced</span>
+          <span className="font-normal text-slate-400">Not synced</span>
         )}
-        {/* The editor lives in this cell rather than a trailing actions column
-            because the trailing column is `hidden` below `md` — a phone would
-            get the value and no way to change it. */}
-        {row.canEdit && row.synced ? <InlineLimitEditor row={row} /> : null}
       </td>
 
       <td className={WIDE_ONLY_CELL}>
@@ -451,6 +479,30 @@ function MemberTableRow({ row }: { row: MemberRow }) {
             Pending request
           </span>
         ) : null}
+      </td>
+
+      {/*
+        Actions, in a column of their own.
+        They used to share the Limit cell, so the button's left edge tracked the
+        width of the number beside it: $1,500 pushed it one place further right
+        than $200, and the column of Edits was ragged by 30px down the page.
+        Alone in a shrink-to-fit cell (`md:w-px` + `whitespace-nowrap`) they line
+        up on a single edge no matter what the row says.
+
+        On a phone card there is no column to align to, so the button pins to
+        the card's top-right corner instead — level with the name, the way the
+        Limit and Spend lines are level with their own labels. Given a line of
+        its own it sat under the data with a card's width of nothing to its
+        left, and made every card taller to say it.
+
+        `relative` (at `md`+) and the pinned corner (below it) are both the
+        anchor the editor popover measures from; `empty:hidden` keeps a row
+        nobody may edit from reserving the corner at all.
+      */}
+      <td
+        className={`${CELL} absolute top-2 right-2 text-right empty:hidden md:relative md:top-auto md:right-auto md:w-px md:whitespace-nowrap md:empty:table-cell`}
+      >
+        {row.canEdit && row.synced ? <InlineLimitEditor row={row} /> : null}
       </td>
     </tr>
   );
@@ -512,7 +564,7 @@ export function MembersTable({
             aria-label="Search users"
             data-testid="member-search"
             onChange={(event) => narrow(() => setQuery(event.target.value))}
-            className="w-full rounded border border-slate-300 px-2 py-1 text-sm sm:w-64 dark:border-slate-700 dark:bg-slate-900"
+            className={`${FIELD} w-full sm:w-64`}
           />
           <span className="text-sm text-slate-500" data-testid="member-count">
             {countLabel(shown.length, offset, filtered.length, rows.length)}
@@ -534,13 +586,13 @@ export function MembersTable({
             />
           ))}
 
-          <label className="flex items-center gap-2 py-1 text-sm">
+          <label className="flex min-h-11 items-center gap-2 text-sm md:min-h-9">
             <input
               type="checkbox"
               checked={overridesOnly}
               data-testid="member-filter-overrides"
               onChange={(event) => narrow(() => setOverridesOnly(event.target.checked))}
-              className="h-4 w-4"
+              className={CHECKBOX}
             />
             Only manual overrides
           </label>
@@ -558,15 +610,42 @@ export function MembersTable({
             (see `MemberTableRow`), so the wrapper stays flat there to avoid a
             card-inside-a-card.
           */}
-          <div className="md:overflow-x-auto md:rounded-xl md:border md:border-slate-200 md:bg-white md:shadow-sm dark:md:border-slate-800 dark:md:bg-slate-900">
+          {/*
+            No `overflow-x-auto` here any more, and both of the changes above
+            depend on that: an overflow container is a clipping context, which
+            would cut the editor popover off at the panel's edge, AND it becomes
+            the scrollport a `sticky` header measures against — a container that
+            never scrolls vertically, so the header would simply never stick.
+            Below `lg` the table carries only four columns, and at `lg`+ the
+            email cell is capped, so nothing needs to scroll sideways.
+          */}
+          <div className="md:rounded-xl md:border md:border-slate-200 md:bg-white md:shadow-sm dark:md:border-slate-800 dark:md:bg-slate-900">
             <table className="block w-full border-collapse text-sm md:table">
               <thead className="hidden md:table-header-group">
-                <tr className="border-b border-slate-200 text-left dark:border-slate-800">
+                <tr className="text-left">
                   {HEADERS.map((header, index) => (
                     <th
                       key={header.label || index}
                       scope="col"
-                      className={`px-2 py-2 font-medium text-slate-500 ${header.className ?? ""}`}
+                      /*
+                        Sticky, so column headers survive the scroll down a
+                        50-row page — by row 30 "which number is the limit and
+                        which is the spend" was a guess.
+
+                        `md:-top-6` matches `<main>`'s `md:p-6`. Pinned at
+                        `top-0` the header parks at the scrollport's CONTENT
+                        edge, leaving a 24px band of padding above it that
+                        scrolling rows slide through in full view — the header
+                        looked like it was floating over a leak. Offsetting it
+                        by exactly the padding parks it on the scrollport edge
+                        instead, and rows disappear cleanly underneath.
+
+                        The bottom rule is an inset shadow rather than a border:
+                        under `border-collapse` a sticky cell's own border is
+                        painted with the row it came from and scrolls away with
+                        it, leaving the header hanging over the rows unruled.
+                      */
+                      className={`sticky top-0 z-10 bg-white px-2 py-2.5 font-medium text-slate-500 shadow-[inset_0_-1px_0_var(--color-slate-200)] first:rounded-tl-xl last:rounded-tr-xl md:-top-6 dark:bg-slate-900 dark:shadow-[inset_0_-1px_0_var(--color-slate-800)] ${header.className ?? ""}`}
                     >
                       {header.label}
                     </th>

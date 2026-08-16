@@ -183,7 +183,10 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
         </p>
       </header>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      {/* `items-start`: the two cards hold different amounts of content, and a
+          stretched grid row was padding the shorter one with ~90px of empty
+          space below its last control rather than letting it end. */}
+      <div className="grid items-start gap-4 md:grid-cols-2">
         <article className={`${CARD} flex flex-col gap-4 p-4 sm:p-5`} data-testid="limit-card">
           <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
             Effective spend limit
@@ -252,71 +255,76 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
         </article>
       </div>
 
-      <article className={`${CARD} flex flex-col gap-3 p-4 sm:p-5`} data-testid="request-card">
-        <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
-          Increase request
-        </h2>
-        {highlighted === null ? (
-          <p className="text-sm text-slate-500" data-testid="no-requests">
-            No increase requests on record.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-2 text-sm" data-testid="request-summary" data-status={highlighted.status}>
-            <p>
-              <span className="font-medium capitalize">{highlighted.status}</span>
-              <span className="text-slate-500"> · raised {formatDate(highlighted.created_at)}</span>
-              {highlighted.resolved_at === null ? null : (
-                <span className="text-slate-500"> · resolved {formatDate(highlighted.resolved_at)}</span>
-              )}
+      {/* Both of these hold a line or two. Full width each, they were two bands
+          of mostly empty card stacked under the pair above; side by side they
+          match that pair's rhythm and the page ends a screen sooner. */}
+      <div className="grid items-start gap-4 md:grid-cols-2">
+        <article className={`${CARD} flex flex-col gap-3 p-4 sm:p-5`} data-testid="request-card">
+          <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
+            Increase request
+          </h2>
+          {highlighted === null ? (
+            <p className="text-sm text-slate-500" data-testid="no-requests">
+              No increase requests on record.
             </p>
-            {summary === null ? (
-              <p className="text-slate-500">No live spend summary on this request.</p>
-            ) : (
-              <p className="flex flex-wrap items-center gap-2">
-                <span className="text-slate-500">At request time:</span>
-                <Money amount={summary.amount ?? null} currency={summary.currency ?? null} />
-                <span className="text-slate-500">cap,</span>
-                <SpendBar
-                  spend={summary.period_to_date_spend ?? null}
-                  amount={summary.amount ?? null}
-                  currency={summary.currency ?? null}
-                />
+          ) : (
+            <div className="flex flex-col gap-2 text-sm" data-testid="request-summary" data-status={highlighted.status}>
+              <p>
+                <span className="font-medium capitalize">{highlighted.status}</span>
+                <span className="text-slate-500"> · raised {formatDate(highlighted.created_at)}</span>
+                {highlighted.resolved_at === null ? null : (
+                  <span className="text-slate-500"> · resolved {formatDate(highlighted.resolved_at)}</span>
+                )}
               </p>
-            )}
-            <Link
-              href="/requests"
-              className="w-fit text-brand-700 hover:underline dark:text-brand-300"
-            >
-              Go to the requests queue →
-            </Link>
-          </div>
-        )}
-      </article>
+              {summary === null ? (
+                <p className="text-slate-500">No live spend summary on this request.</p>
+              ) : (
+                <p className="flex flex-wrap items-center gap-2">
+                  <span className="text-slate-500">At request time:</span>
+                  <Money amount={summary.amount ?? null} currency={summary.currency ?? null} />
+                  <span className="text-slate-500">cap,</span>
+                  <SpendBar
+                    spend={summary.period_to_date_spend ?? null}
+                    amount={summary.amount ?? null}
+                    currency={summary.currency ?? null}
+                  />
+                </p>
+              )}
+              <Link
+                href="/requests"
+                className="w-fit text-brand-700 hover:underline dark:text-brand-300"
+              >
+                Go to the requests queue →
+              </Link>
+            </div>
+          )}
+        </article>
 
-      <article className={`${CARD} flex flex-col gap-3 p-4 sm:p-5`} data-testid="edit-access">
-        <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">Edit access</h2>
-        {allEditorIds.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            No hierarchy role grants edit access to this user — administrators only.
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-1 text-sm">
-            {allEditorIds.map((editorId) => {
-              const editor = related.get(editorId);
-              return (
-                <li key={editorId} data-testid="editor">
-                  <span className="font-medium">{editor?.name ?? editorId}</span>
-                  <span className="text-slate-500">
-                    {" "}
-                    — {(rolesByEditor.get(editorId) ?? []).join(", ")}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        <p className="text-xs text-slate-500">Administrators can edit anyone.</p>
-      </article>
+        <article className={`${CARD} flex flex-col gap-3 p-4 sm:p-5`} data-testid="edit-access">
+          <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">Edit access</h2>
+          {allEditorIds.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              No hierarchy role grants edit access to this user — administrators only.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-1 text-sm">
+              {allEditorIds.map((editorId) => {
+                const editor = related.get(editorId);
+                return (
+                  <li key={editorId} data-testid="editor">
+                    <span className="font-medium">{editor?.name ?? editorId}</span>
+                    <span className="text-slate-500">
+                      {" "}
+                      — {(rolesByEditor.get(editorId) ?? []).join(", ")}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <p className="text-xs text-slate-500">Administrators can edit anyone.</p>
+        </article>
+      </div>
     </section>
   );
 }

@@ -31,6 +31,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import { AmountInput, parseAmountInput } from "@/components/amount-input";
+import { button } from "@/components/controls";
 import { Money } from "@/components/money";
 import { minorUnitsToDollarsInput } from "@/lib/dollars";
 
@@ -174,7 +175,7 @@ export function EditLimit({
             onClick={openSet}
             disabled={pending}
             data-testid="set-limit"
-            className="inline-flex min-h-11 items-center justify-center rounded bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
+            className={button("primary", "sm")}
           >
             Set limit
           </button>
@@ -184,7 +185,7 @@ export function EditLimit({
               onClick={openRemove}
               disabled={pending}
               data-testid="remove-override"
-              className="inline-flex min-h-11 items-center justify-center rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs dark:border-slate-600 dark:hover:bg-slate-800"
+              className={button("secondary", "sm")}
             >
               Remove override
             </button>
@@ -205,7 +206,7 @@ export function EditLimit({
           onKeyDown={(event) => {
             if (event.key === "Escape" && !pending) setDialog(null);
           }}
-          className="flex flex-col gap-3 rounded border border-slate-300 p-3 dark:border-slate-700"
+          className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/40"
         >
           <h3 className="text-sm font-semibold">Set spend limit</h3>
           <AmountInput
@@ -225,7 +226,7 @@ export function EditLimit({
               onClick={save}
               disabled={pending || minorUnits === null}
               data-testid="limit-save"
-              className="inline-flex min-h-11 items-center justify-center rounded bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
+              className={button("primary", "sm")}
             >
               {pending ? "Saving…" : "Save"}
             </button>
@@ -234,7 +235,7 @@ export function EditLimit({
               onClick={() => setDialog(null)}
               disabled={pending}
               data-testid="limit-cancel"
-              className="inline-flex min-h-11 items-center justify-center rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs dark:border-slate-600 dark:hover:bg-slate-800"
+              className={button("secondary", "sm")}
             >
               Cancel
             </button>
@@ -253,7 +254,7 @@ export function EditLimit({
           onKeyDown={(event) => {
             if (event.key === "Escape" && !pending) setDialog(null);
           }}
-          className="flex flex-col gap-3 rounded border border-slate-300 p-3 focus:outline-none dark:border-slate-700"
+          className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 focus:outline-none dark:border-slate-700 dark:bg-slate-950/40"
         >
           <h3 className="text-sm font-semibold">Remove override</h3>
           <p className="text-xs text-slate-600 dark:text-slate-400">
@@ -267,7 +268,7 @@ export function EditLimit({
               onClick={remove}
               disabled={pending}
               data-testid="remove-confirm"
-              className="inline-flex min-h-11 items-center justify-center rounded bg-danger-600 px-3 py-2 text-sm font-medium text-white hover:bg-danger-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
+              className={button("danger", "sm")}
             >
               {pending ? "Removing…" : "Remove override"}
             </button>
@@ -276,7 +277,7 @@ export function EditLimit({
               onClick={() => setDialog(null)}
               disabled={pending}
               data-testid="remove-cancel"
-              className="inline-flex min-h-11 items-center justify-center rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs dark:border-slate-600 dark:hover:bg-slate-800"
+              className={button("secondary", "sm")}
             >
               Cancel
             </button>
