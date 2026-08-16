@@ -322,7 +322,14 @@ test.describe.serial("admin area", () => {
     await expect(page.getByTestId("import-preview")).toContainText(`${MINI_ORG_SIZE} readable rows`);
     await expect(page.getByTestId("import-issue")).toHaveCount(0);
 
-    await page.getByTestId("import-confirm").click();
+    // Replacing the roster is a two-step commit: the first press opens a
+    // confirmation that names the consequence, and only the button inside it
+    // actually writes.
+    await page.getByTestId("import-begin").click();
+    const importConfirm = page.getByTestId("import-confirm-dialog");
+    await expect(importConfirm).toBeVisible();
+    await expect(importConfirm).toContainText("cannot be undone");
+    await importConfirm.getByTestId("import-confirm").click();
     await expect(page.getByTestId("import-done")).toContainText(
       `Imported ${MINI_ORG_SIZE} employees`,
     );

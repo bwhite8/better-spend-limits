@@ -21,6 +21,12 @@ export interface AmountInputProps {
   id?: string;
   disabled?: boolean;
   /**
+   * Focus the field on mount. The dialogs that host this input render it only
+   * once opened, so `autoFocus` fires exactly when the dialog appears — which is
+   * where a keyboard user expects the caret to be.
+   */
+  autoFocus?: boolean;
+  /**
    * Called on every keystroke with the minor-units string, or `null` while the
    * input is empty or invalid. The second argument is the validation message.
    */
@@ -63,6 +69,7 @@ export function AmountInput({
   name = "amount",
   id,
   disabled,
+  autoFocus,
   onValueChange,
 }: AmountInputProps) {
   const generatedId = useId();
@@ -91,6 +98,7 @@ export function AmountInput({
           name={name}
           value={raw}
           disabled={disabled}
+          autoFocus={autoFocus}
           inputMode="decimal"
           autoComplete="off"
           aria-invalid={error !== null}
@@ -101,7 +109,7 @@ export function AmountInput({
         />
       </div>
       {error === null ? null : (
-        <p id={`${inputId}-error`} role="alert" data-testid="amount-error" className="text-xs text-red-600">
+        <p id={`${inputId}-error`} role="alert" data-testid="amount-error" className="text-xs text-danger-600">
           {error}
         </p>
       )}

@@ -20,7 +20,7 @@
  */
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { AmountInput, parseAmountInput } from "@/components/amount-input";
 
@@ -36,6 +36,14 @@ export interface RequestActionsProps {
 type OpenDialog = "approve" | "deny" | null;
 
 const REQUEST_HEADERS = { "content-type": "application/json" } as const;
+
+/**
+ * How long the "Approved / Denied" confirmation stays up before the queue
+ * refreshes and this resolved card leaves the pending list. A resolved request
+ * has nowhere to live on this tab, so without this beat the only feedback on a
+ * decision would be the card silently disappearing.
+ */
+const RESOLVED_REFRESH_MS = 1100;
 
 function messageOf(body: unknown, fallback: string): string {
   if (body !== null && typeof body === "object") {
@@ -57,9 +65,27 @@ export function RequestActions({
   const [minorUnits, setMinorUnits] = useState<string | null>(null);
   const [suppress, setSuppress] = useState(suppressDefault);
   const [error, setError] = useState<string | null>(null);
+  // Once set, the decision is done: the buttons stand down and this line takes
+  // their place until the deferred refresh sweeps the resolved card away.
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // The deny dialog has no field to catch focus, so focus its panel on open —
+  // Escape then closes from anywhere inside, and the label is announced.
+  const denyDialogRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (dialog === "deny") denyDialogRef.current?.focus();
+  }, [dialog]);
+
+  // A deferred refresh outlives its transition, so clear it if the card unmounts
+  // first (a navigation away before the beat elapses).
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (refreshTimer.current !== null) clearTimeout(refreshTimer.current);
+  }, []);
 
   const openApprove = () => {
     setError(null);
+    setNotice(null);
     setMinorUnits(parseAmountInput(prefillDollars).minorUnits);
     setSuppress(suppressDefault);
     setDialog("approve");
@@ -67,12 +93,14 @@ export function RequestActions({
 
   const openDeny = () => {
     setError(null);
+    setNotice(null);
     setSuppress(suppressDefault);
     setDialog("deny");
   };
 
-  const submit = (payload: Record<string, unknown>) => {
+  const submit = (payload: Record<string, unknown>, successMessage: string) => {
     setError(null);
+    setNotice(null);
     startTransition(async () => {
       let ok = false;
       try {
@@ -87,19 +115,33 @@ export function RequestActions({
       } catch {
         setError("The decision could not be recorded — the app could not be reached.");
       }
-      if (ok) setDialog(null);
-      // Refresh either way: a rejected decision usually means somebody else has
-      // already resolved this request, and stale numbers are what caused it.
-      router.refresh();
+      if (ok) {
+        setDialog(null);
+        setNotice(successMessage);
+        // Hold the refresh a beat so the confirmation is seen before the card
+        // leaves the pending queue.
+        refreshTimer.current = setTimeout(() => router.refresh(), RESOLVED_REFRESH_MS);
+      } else {
+        // Refresh now: a rejected decision usually means somebody else has
+        // already resolved this request, and stale numbers are what caused it.
+        router.refresh();
+      }
     });
   };
 
   const approve = () => {
     if (minorUnits === null) return;
-    submit({ action: "approve", amount: minorUnits, suppressNotification: suppress });
+    submit(
+      { action: "approve", amount: minorUnits, suppressNotification: suppress },
+      `Approved — ${requesterName}'s new limit is set.`,
+    );
   };
 
-  const deny = () => submit({ action: "deny", suppressNotification: suppress });
+  const deny = () =>
+    submit(
+      { action: "deny", suppressNotification: suppress },
+      `Denied — ${requesterName}'s limit is unchanged.`,
+    );
 
   const suppressToggle = (testId: string) => (
     <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
@@ -117,26 +159,28 @@ export function RequestActions({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={openApprove}
-          disabled={pending}
-          data-testid="approve-open"
-          className="inline-flex min-h-11 items-center justify-center rounded bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
-        >
-          Approve
-        </button>
-        <button
-          type="button"
-          onClick={openDeny}
-          disabled={pending}
-          data-testid="deny-open"
-          className="inline-flex min-h-11 items-center justify-center rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs dark:border-slate-600 dark:hover:bg-slate-800"
-        >
-          Deny
-        </button>
-      </div>
+      {notice === null ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={openApprove}
+            disabled={pending}
+            data-testid="approve-open"
+            className="inline-flex min-h-11 items-center justify-center rounded bg-success-600 px-3 py-2 text-sm font-medium text-white hover:bg-success-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
+          >
+            Approve
+          </button>
+          <button
+            type="button"
+            onClick={openDeny}
+            disabled={pending}
+            data-testid="deny-open"
+            className="inline-flex min-h-11 items-center justify-center rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs dark:border-slate-600 dark:hover:bg-slate-800"
+          >
+            Deny
+          </button>
+        </div>
+      ) : null}
 
       {dialog === "approve" ? (
         <section
@@ -144,12 +188,16 @@ export function RequestActions({
           aria-modal="false"
           aria-label={`Approve the increase request from ${requesterName}`}
           data-testid="approve-dialog"
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && !pending) setDialog(null);
+          }}
           className="flex flex-col gap-3 rounded border border-slate-300 p-3 dark:border-slate-700"
         >
           <h3 className="text-sm font-semibold">Approve at a new limit</h3>
           <AmountInput
             defaultValue={prefillDollars}
             disabled={pending}
+            autoFocus
             onValueChange={(value) => setMinorUnits(value)}
           />
           <p className="text-xs text-slate-500">
@@ -163,7 +211,7 @@ export function RequestActions({
               onClick={approve}
               disabled={pending || minorUnits === null}
               data-testid="approve-confirm"
-              className="inline-flex min-h-11 items-center justify-center rounded bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
+              className="inline-flex min-h-11 items-center justify-center rounded bg-success-600 px-3 py-2 text-sm font-medium text-white hover:bg-success-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
             >
               {pending ? "Approving…" : "Approve"}
             </button>
@@ -182,11 +230,16 @@ export function RequestActions({
 
       {dialog === "deny" ? (
         <section
+          ref={denyDialogRef}
+          tabIndex={-1}
           role="dialog"
           aria-modal="false"
           aria-label={`Deny the increase request from ${requesterName}`}
           data-testid="deny-dialog"
-          className="flex flex-col gap-3 rounded border border-slate-300 p-3 dark:border-slate-700"
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && !pending) setDialog(null);
+          }}
+          className="flex flex-col gap-3 rounded border border-slate-300 p-3 focus:outline-none dark:border-slate-700"
         >
           <h3 className="text-sm font-semibold">Deny this request</h3>
           <p className="text-xs text-slate-600 dark:text-slate-400">
@@ -200,7 +253,7 @@ export function RequestActions({
               onClick={deny}
               disabled={pending}
               data-testid="deny-confirm"
-              className="inline-flex min-h-11 items-center justify-center rounded bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
+              className="inline-flex min-h-11 items-center justify-center rounded bg-danger-600 px-3 py-2 text-sm font-medium text-white hover:bg-danger-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
             >
               {pending ? "Denying…" : "Deny request"}
             </button>
@@ -217,8 +270,14 @@ export function RequestActions({
         </section>
       ) : null}
 
+      {notice === null ? null : (
+        <p role="status" data-testid="request-done" className="text-sm font-medium text-success-700 dark:text-success-400">
+          {notice}
+        </p>
+      )}
+
       {error === null ? null : (
-        <p role="alert" data-testid="request-error" className="text-xs text-red-600">
+        <p role="alert" data-testid="request-error" className="text-xs text-danger-600">
           {error}
         </p>
       )}

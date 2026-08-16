@@ -113,7 +113,7 @@ export function Nav({ isAdmin, currentUser, switcher, sync }: NavProps) {
           <p className="text-xs text-slate-500" data-testid="current-user" data-email={currentUser.email}>
             <span className="block font-medium text-slate-700 dark:text-slate-300">{currentUser.name}</span>
             {currentUser.email}
-            {isAdmin ? <span className="ml-1 font-medium text-indigo-600">· admin</span> : null}
+            {isAdmin ? <span className="ml-1 font-medium text-brand-600">· admin</span> : null}
           </p>
         )}
 

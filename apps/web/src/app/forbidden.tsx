@@ -28,7 +28,7 @@ export default function Forbidden({
 }: ForbiddenProps) {
   return (
     <section data-testid="forbidden" className="mx-auto max-w-xl py-16">
-      <p className="text-sm font-semibold tracking-wide text-red-600 uppercase">403 — Forbidden</p>
+      <p className="text-sm font-semibold tracking-wide text-danger-600 uppercase">403 — Forbidden</p>
       <h1 className="mt-2 text-2xl font-semibold tracking-tight">{title}</h1>
       <p className="mt-3 text-slate-600 dark:text-slate-400">{detail}</p>
     </section>

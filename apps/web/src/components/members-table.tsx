@@ -248,11 +248,17 @@ function InlineLimitEditor({ row }: { row: MemberRow }) {
   const [open, setOpen] = useState(false);
   const [minorUnits, setMinorUnits] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The editor collapses back to the "Edit" button on success, so the row's new
+  // number is the main confirmation — but a manager working down a list moves on
+  // before the value redraws, so a "Saved" chip sits by the button as a second,
+  // slower-to-miss cue. Cleared the moment the editor is reopened.
+  const [saved, setSaved] = useState(false);
 
   const prefill = minorUnitsToDollarsInput(row.amount);
 
   const openEditor = () => {
     setError(null);
+    setSaved(false);
     // Seeded here because `AmountInput` reports a value on change, not on mount;
     // without this, Save would be disabled until the first keystroke.
     setMinorUnits(parseAmountInput(prefill).minorUnits);
@@ -278,7 +284,10 @@ function InlineLimitEditor({ row }: { row: MemberRow }) {
       } catch {
         setError("The change could not be saved — the app could not be reached.");
       }
-      if (ok) setOpen(false);
+      if (ok) {
+        setOpen(false);
+        setSaved(true);
+      }
       router.refresh();
     });
   };
@@ -288,15 +297,26 @@ function InlineLimitEditor({ row }: { row: MemberRow }) {
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={openEditor}
-        data-testid="member-edit-limit"
-        aria-label={`Edit the spend limit for ${row.name}`}
-        className={`${buttonClass} ml-2 border border-slate-300 align-middle hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-800`}
-      >
-        Edit
-      </button>
+      <span className="inline-flex items-center gap-2 align-middle">
+        <button
+          type="button"
+          onClick={openEditor}
+          data-testid="member-edit-limit"
+          aria-label={`Edit the spend limit for ${row.name}`}
+          className={`${buttonClass} ml-2 border border-slate-300 hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-800`}
+        >
+          Edit
+        </button>
+        {saved ? (
+          <span
+            role="status"
+            data-testid="member-limit-saved"
+            className="text-xs font-medium text-success-700 dark:text-success-400"
+          >
+            Saved
+          </span>
+        ) : null}
+      </span>
     );
   }
 
@@ -305,12 +325,15 @@ function InlineLimitEditor({ row }: { row: MemberRow }) {
       role="group"
       aria-label={`Set the spend limit for ${row.name}`}
       data-testid="member-limit-editor"
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && !pending) setOpen(false);
+      }}
       className="mt-2 flex w-full flex-col gap-2 rounded border border-slate-300 p-2 text-left font-normal normal-nums md:w-64 dark:border-slate-700"
     >
       {row.hasPendingRequest ? (
         <p
           data-testid="member-pending-warning"
-          className="rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+          className="rounded border border-warn-300 bg-warn-50 px-2 py-1.5 text-xs text-warn-900 dark:border-warn-800 dark:bg-warn-950 dark:text-warn-200"
         >
           {row.name} has a pending increase request — setting a limit here won&rsquo;t resolve it.
         </p>
@@ -320,6 +343,7 @@ function InlineLimitEditor({ row }: { row: MemberRow }) {
         label="New limit (USD)"
         defaultValue={prefill}
         disabled={pending}
+        autoFocus
         onValueChange={(value) => setMinorUnits(value)}
       />
 
@@ -329,7 +353,7 @@ function InlineLimitEditor({ row }: { row: MemberRow }) {
           onClick={save}
           disabled={pending || minorUnits === null}
           data-testid="member-limit-save"
-          className={`${buttonClass} bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60`}
+          className={`${buttonClass} bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60`}
         >
           {pending ? "Saving…" : "Save"}
         </button>
@@ -359,7 +383,7 @@ function InlineLimitEditor({ row }: { row: MemberRow }) {
       ) : null}
 
       {error === null ? null : (
-        <p role="alert" data-testid="member-limit-error" className="text-xs text-red-600">
+        <p role="alert" data-testid="member-limit-error" className="text-xs text-danger-600">
           {error}
         </p>
       )}
@@ -378,7 +402,7 @@ function MemberTableRow({ row }: { row: MemberRow }) {
         <Link
           href={`/members/${row.id}`}
           data-testid="member-link"
-          className="font-medium text-indigo-700 hover:underline dark:text-indigo-300"
+          className="font-medium text-brand-700 hover:underline dark:text-brand-300"
         >
           {row.name}
         </Link>
@@ -415,7 +439,7 @@ function MemberTableRow({ row }: { row: MemberRow }) {
         {row.hasPendingRequest ? (
           <span
             data-testid="pending-chip"
-            className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium whitespace-nowrap text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+            className="rounded bg-warn-100 px-1.5 py-0.5 text-xs font-medium whitespace-nowrap text-warn-900 dark:bg-warn-950 dark:text-warn-200"
           >
             Pending request
           </span>

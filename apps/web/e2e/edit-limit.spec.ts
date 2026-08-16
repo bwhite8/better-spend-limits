@@ -64,6 +64,7 @@ test.describe.serial("edit limit", () => {
     await dialog.getByTestId("limit-save").click();
 
     await expect(dialog).toBeHidden();
+    await expect(page.getByTestId("limit-saved")).toHaveText("Limit updated.");
     await expect(page.getByTestId("member-limit")).toHaveText("$750.00");
     await expect(page.getByTestId("limit-card").getByTestId("source-badge")).toHaveText("Override");
   });
@@ -86,6 +87,7 @@ test.describe.serial("edit limit", () => {
     await dialog.getByTestId("remove-confirm").click();
 
     await expect(dialog).toBeHidden();
+    await expect(page.getByTestId("limit-saved")).toContainText("Override removed");
     await expect(badge).not.toHaveText("Override");
     await expect(page.getByTestId("member-limit")).toHaveText(/^\$[\d,]+\.\d{2}$/);
     // The override is gone, so there is nothing left to remove.

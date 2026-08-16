@@ -94,11 +94,37 @@ export default async function AdminPage({
 
   return (
     <section className="flex flex-col gap-10">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Admin</h1>
-        <p className="text-sm text-slate-500">
-          Settings, the employee roster, and the record of everything this app has changed.
-        </p>
+      <header className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold tracking-tight">Admin</h1>
+          <p className="text-sm text-slate-500">
+            Settings, the employee roster, and the record of everything this app has changed.
+          </p>
+        </div>
+
+        {/*
+          Five long sections on one page. These jump links reach the anchors each
+          Section already carries (the `id`/`scroll-mt-6` were there for deep
+          links) so a new admin can get to the audit log without scrolling past
+          four other things first.
+        */}
+        <nav aria-label="Admin sections" className="flex flex-wrap gap-1.5 text-sm">
+          {[
+            { href: "#config", label: "Settings" },
+            { href: "#ai-leads", label: "AI leads" },
+            { href: "#import", label: "Import" },
+            { href: "#audit", label: "Audit log" },
+            { href: "#unmatched", label: "Unmatched" },
+          ].map((item) => (
+            <a
+              key={item.href}
+              href={item.href}
+              className="rounded border border-slate-200 px-2 py-1 text-slate-600 hover:bg-slate-100 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800"
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
       </header>
 
       <Section

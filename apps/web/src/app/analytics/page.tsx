@@ -152,7 +152,7 @@ function MemberLink({
     <Link
       href={`/members/${employeeId}`}
       data-testid={testId}
-      className="font-medium text-indigo-700 hover:underline dark:text-indigo-300"
+      className="font-medium text-brand-700 hover:underline dark:text-brand-300"
     >
       {name}
     </Link>
@@ -186,7 +186,7 @@ function NearLimitTable({ rows }: { rows: NearLimitRow[] }) {
                   <span
                     data-testid="at-cap-flag"
                     title="An explicit zero cap: included usage only (§G9)."
-                    className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-900 dark:bg-red-950 dark:text-red-200"
+                    className="ml-2 rounded bg-danger-100 px-1.5 py-0.5 text-xs font-medium text-danger-900 dark:bg-danger-950 dark:text-danger-200"
                   >
                     At cap
                   </span>

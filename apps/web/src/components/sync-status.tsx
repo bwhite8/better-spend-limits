@@ -66,7 +66,7 @@ export function SyncStatus({ syncedAt, initialLabel, stale, errored }: SyncStatu
   return (
     <div className="flex flex-col gap-1" data-testid="sync-status" data-synced-at={syncedAt ?? ""}>
       <span
-        className={`text-xs ${errored ? "text-red-600" : stale ? "text-amber-600" : "text-slate-500"}`}
+        className={`text-xs ${errored ? "text-danger-600" : stale ? "text-warn-600" : "text-slate-500"}`}
         data-testid="sync-label"
       >
         {label}

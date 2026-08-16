@@ -163,7 +163,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
   return (
     <section className="flex max-w-4xl flex-col gap-8">
       <header className="flex flex-col gap-1">
-        <Link href="/members" className="text-sm text-indigo-700 hover:underline dark:text-indigo-300">
+        <Link href="/members" className="text-sm text-brand-700 hover:underline dark:text-brand-300">
           ← Users
         </Link>
         <h1 data-testid="member-name" className="text-2xl font-semibold tracking-tight">
@@ -171,7 +171,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
           {target.is_admin ? (
             <span
               data-testid="admin-badge"
-              className="ml-2 rounded bg-indigo-100 px-1.5 py-0.5 align-middle text-xs font-medium text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200"
+              className="ml-2 rounded bg-brand-100 px-1.5 py-0.5 align-middle text-xs font-medium text-brand-800 dark:bg-brand-950 dark:text-brand-200"
             >
               Admin
             </span>
@@ -239,7 +239,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                   ) : (
                     <Link
                       href={`/members/${holder.id}`}
-                      className="text-indigo-700 hover:underline dark:text-indigo-300"
+                      className="text-brand-700 hover:underline dark:text-brand-300"
                     >
                       {holder.name}
                     </Link>
@@ -284,7 +284,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
             )}
             <Link
               href="/requests"
-              className="w-fit text-indigo-700 hover:underline dark:text-indigo-300"
+              className="w-fit text-brand-700 hover:underline dark:text-brand-300"
             >
               Go to the requests queue →
             </Link>

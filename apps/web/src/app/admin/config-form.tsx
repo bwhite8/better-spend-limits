@@ -213,14 +213,14 @@ export function ConfigForm({ initial }: ConfigFormProps) {
         </button>
 
         {result?.ok === true ? (
-          <p role="status" data-testid="config-saved" className="text-sm text-emerald-700 dark:text-emerald-400">
+          <p role="status" data-testid="config-saved" className="text-sm text-success-700 dark:text-success-400">
             {result.message}
           </p>
         ) : null}
       </div>
 
       {localError === null && result?.ok !== false ? null : (
-        <p role="alert" data-testid="config-error" className="text-sm text-red-600">
+        <p role="alert" data-testid="config-error" className="text-sm text-danger-600">
           {localError ?? result?.message}
         </p>
       )}

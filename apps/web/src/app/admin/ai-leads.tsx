@@ -113,14 +113,14 @@ function LeadRow({ lead, leaders }: { lead: AiLeadEntry; leaders: AiLeadPerson[]
           <p
             role="status"
             data-testid="ai-lead-saved"
-            className="text-sm text-emerald-700 dark:text-emerald-400"
+            className="text-sm text-success-700 dark:text-success-400"
           >
             {result.message}
           </p>
         ) : null}
 
         {result?.ok === false ? (
-          <p role="alert" data-testid="ai-lead-error" className="text-sm text-red-600">
+          <p role="alert" data-testid="ai-lead-error" className="text-sm text-danger-600">
             {result.message}
           </p>
         ) : null}

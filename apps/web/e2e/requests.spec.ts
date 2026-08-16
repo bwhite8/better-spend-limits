@@ -127,6 +127,9 @@ test.describe.serial("increase requests", () => {
     await dialog.getByTestId("amount-input").fill("900");
     await dialog.getByTestId("approve-confirm").click();
 
+    // The decision is confirmed in place for a beat before the resolved card is
+    // swept out of the pending tab.
+    await expect(mine.getByTestId("request-done")).toContainText("Approved");
     // Resolved requests leave the pending tab entirely.
     await expect(mine).toHaveCount(0);
 
@@ -158,6 +161,7 @@ test.describe.serial("increase requests", () => {
     await expect(dialog).toBeVisible();
     await dialog.getByTestId("deny-confirm").click();
 
+    await expect(target.getByTestId("request-done")).toContainText("Denied");
     await expect(target).toHaveCount(0);
     await expect(page.getByTestId("request-error")).toHaveCount(0);
 

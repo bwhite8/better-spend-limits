@@ -111,6 +111,8 @@ test.describe.serial("inline limit editing", () => {
     expect((await request.response())?.status()).toBe(200);
 
     await expect(editor).toBeHidden();
+    // The editor collapses on success and leaves a "Saved" cue by the button.
+    await expect(row.getByTestId("member-limit-saved")).toHaveText("Saved");
     await expect(limitCell(row)).toHaveText(NEW_RENDERED);
     await expect(row.getByTestId("source-badge")).toHaveText("Override");
 

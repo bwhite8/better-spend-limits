@@ -69,9 +69,9 @@ export interface SpendBarProps {
 }
 
 function barTone(ratio: number): string {
-  if (ratio >= 1) return "bg-red-500";
-  if (ratio >= 0.8) return "bg-amber-500";
-  return "bg-emerald-500";
+  if (ratio >= 1) return "bg-danger-500";
+  if (ratio >= 0.8) return "bg-warn-500";
+  return "bg-success-500";
 }
 
 /**

@@ -28,7 +28,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { AmountInput, parseAmountInput } from "@/components/amount-input";
 import { Money } from "@/components/money";
@@ -77,6 +77,18 @@ export function EditLimit({
   const [dialog, setDialog] = useState<OpenDialog>(null);
   const [minorUnits, setMinorUnits] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A short "it worked" line, shown where the buttons are once the dialog closes.
+  // It is what tells a reader who was not watching the number that the write
+  // landed — the same role `config-form.tsx` gives its "Saved" message.
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // The remove dialog has no input to catch focus, so focus its panel when it
+  // opens: it moves the caret off the page behind it (Escape now closes from
+  // anywhere inside) and a screen reader announces the dialog's label.
+  const removeDialogRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (dialog === "remove") removeDialogRef.current?.focus();
+  }, [dialog]);
 
   if (!canEdit) {
     return (
@@ -91,17 +103,20 @@ export function EditLimit({
 
   const openSet = () => {
     setError(null);
+    setNotice(null);
     setMinorUnits(parseAmountInput(prefill).minorUnits);
     setDialog("set");
   };
 
   const openRemove = () => {
     setError(null);
+    setNotice(null);
     setDialog("remove");
   };
 
-  const submit = (init: RequestInit) => {
+  const submit = (init: RequestInit, successMessage: string) => {
     setError(null);
+    setNotice(null);
     startTransition(async () => {
       let ok = false;
       try {
@@ -112,7 +127,10 @@ export function EditLimit({
       } catch {
         setError("The change could not be saved — the app could not be reached.");
       }
-      if (ok) setDialog(null);
+      if (ok) {
+        setDialog(null);
+        setNotice(successMessage);
+      }
       // Refresh either way: a failed write may still have been preceded by a
       // change somebody else made, and stale numbers are what caused it.
       router.refresh();
@@ -121,21 +139,24 @@ export function EditLimit({
 
   const save = () => {
     if (minorUnits === null) return;
-    submit({
-      method: "POST",
-      headers: REQUEST_HEADERS,
-      body: JSON.stringify({ amount: minorUnits }),
-    });
+    submit(
+      {
+        method: "POST",
+        headers: REQUEST_HEADERS,
+        body: JSON.stringify({ amount: minorUnits }),
+      },
+      "Limit updated.",
+    );
   };
 
-  const remove = () => submit({ method: "DELETE" });
+  const remove = () => submit({ method: "DELETE" }, "Override removed — the limit now falls back to an inherited one.");
 
   return (
     <div className="flex flex-col gap-3">
       {hasPendingRequest ? (
         <p
           data-testid="pending-warning"
-          className="rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+          className="rounded border border-warn-300 bg-warn-50 px-2 py-1.5 text-xs text-warn-900 dark:border-warn-800 dark:bg-warn-950 dark:text-warn-200"
         >
           {memberName} has a pending increase request — setting a limit directly won&rsquo;t resolve
           it.{" "}
@@ -153,7 +174,7 @@ export function EditLimit({
             onClick={openSet}
             disabled={pending}
             data-testid="set-limit"
-            className="inline-flex min-h-11 items-center justify-center rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
+            className="inline-flex min-h-11 items-center justify-center rounded bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
           >
             Set limit
           </button>
@@ -181,12 +202,16 @@ export function EditLimit({
           aria-modal="false"
           aria-label={`Set spend limit for ${memberName}`}
           data-testid="limit-dialog"
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && !pending) setDialog(null);
+          }}
           className="flex flex-col gap-3 rounded border border-slate-300 p-3 dark:border-slate-700"
         >
           <h3 className="text-sm font-semibold">Set spend limit</h3>
           <AmountInput
             defaultValue={prefill}
             disabled={pending}
+            autoFocus
             onValueChange={(value) => setMinorUnits(value)}
           />
           <p className="text-xs text-slate-500">
@@ -200,7 +225,7 @@ export function EditLimit({
               onClick={save}
               disabled={pending || minorUnits === null}
               data-testid="limit-save"
-              className="inline-flex min-h-11 items-center justify-center rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
+              className="inline-flex min-h-11 items-center justify-center rounded bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
             >
               {pending ? "Saving…" : "Save"}
             </button>
@@ -219,11 +244,16 @@ export function EditLimit({
 
       {dialog === "remove" ? (
         <section
+          ref={removeDialogRef}
+          tabIndex={-1}
           role="dialog"
           aria-modal="false"
           aria-label={`Remove the spend limit override for ${memberName}`}
           data-testid="remove-dialog"
-          className="flex flex-col gap-3 rounded border border-slate-300 p-3 dark:border-slate-700"
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && !pending) setDialog(null);
+          }}
+          className="flex flex-col gap-3 rounded border border-slate-300 p-3 focus:outline-none dark:border-slate-700"
         >
           <h3 className="text-sm font-semibold">Remove override</h3>
           <p className="text-xs text-slate-600 dark:text-slate-400">
@@ -237,7 +267,7 @@ export function EditLimit({
               onClick={remove}
               disabled={pending}
               data-testid="remove-confirm"
-              className="inline-flex min-h-11 items-center justify-center rounded bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
+              className="inline-flex min-h-11 items-center justify-center rounded bg-danger-600 px-3 py-2 text-sm font-medium text-white hover:bg-danger-700 disabled:opacity-60 md:min-h-0 md:px-2.5 md:py-1 md:text-xs"
             >
               {pending ? "Removing…" : "Remove override"}
             </button>
@@ -254,8 +284,14 @@ export function EditLimit({
         </section>
       ) : null}
 
+      {notice === null ? null : (
+        <p role="status" data-testid="limit-saved" className="text-xs text-success-700 dark:text-success-400">
+          {notice}
+        </p>
+      )}
+
       {error === null ? null : (
-        <p role="alert" data-testid="limit-error" className="text-xs text-red-600">
+        <p role="alert" data-testid="limit-error" className="text-xs text-danger-600">
           {error}
         </p>
       )}

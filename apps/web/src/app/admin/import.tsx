@@ -17,7 +17,7 @@
  * make, as a full navigation, because their identity may have just changed.
  */
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { EMPLOYEE_CSV_HEADER, parseEmployeeCsv, type ParsedEmployeeCsv } from "@/lib/import-employees";
 
@@ -33,10 +33,23 @@ export function EmployeeImport() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [preview, setPreview] = useState<ParsedEmployeeCsv | null>(null);
   const [result, setResult] = useState<AdminActionResult | null>(null);
+  // The second step. Choosing a file makes the roster IMPORTABLE; it takes this
+  // deliberate confirmation to actually replace it — the member remove-override
+  // flow sets the same precedent for a write you cannot take back.
+  const [confirming, setConfirming] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const confirmRef = useRef<HTMLElement>(null);
+
+  // Focus the confirmation when it opens, so Escape can close it and a screen
+  // reader announces what it is about to do.
+  useEffect(() => {
+    if (confirming) confirmRef.current?.focus();
+  }, [confirming]);
 
   const choose = async (file: File | undefined) => {
     setResult(null);
+    // A new (or cleared) file invalidates any confirmation already on screen.
+    setConfirming(false);
 
     if (file === undefined) {
       setCsv(null);
@@ -60,6 +73,7 @@ export function EmployeeImport() {
     startTransition(async () => {
       const answer = await importEmployees(csv);
       setResult(answer);
+      setConfirming(false);
 
       if (answer.ok) {
         // The uploaded roster is now the truth; the chosen file is spent.
@@ -111,7 +125,7 @@ export function EmployeeImport() {
       )}
 
       {issues.length === 0 ? null : (
-        <ul className="flex flex-col gap-1 rounded border border-red-200 p-3 text-xs text-red-700 dark:border-red-900 dark:text-red-300">
+        <ul className="flex flex-col gap-1 rounded border border-danger-200 p-3 text-xs text-danger-700 dark:border-danger-900 dark:text-danger-300">
           {issues.map((issue, index) => (
             <li key={`${issue.line}-${index}`} data-testid="import-issue">
               Line {issue.line}: {issue.message}
@@ -126,24 +140,67 @@ export function EmployeeImport() {
       <div className="flex items-center gap-3">
         <button
           type="button"
-          onClick={confirm}
-          disabled={pending || !importable}
-          data-testid="import-confirm"
-          className="inline-flex min-h-11 items-center justify-center rounded bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60 md:min-h-0 md:py-1.5"
+          onClick={() => setConfirming(true)}
+          disabled={pending || !importable || confirming}
+          data-testid="import-begin"
+          className="inline-flex min-h-11 items-center justify-center rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60 md:min-h-0 md:py-1.5 dark:bg-slate-100 dark:text-slate-900"
         >
-          {pending ? "Importing…" : "Replace roster"}
+          Replace roster…
         </button>
 
         {result === null ? null : (
           <p
             role={result.ok ? "status" : "alert"}
             data-testid={result.ok ? "import-done" : "import-error"}
-            className={`text-sm ${result.ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-600"}`}
+            className={`text-sm ${result.ok ? "text-success-700 dark:text-success-400" : "text-danger-600"}`}
           >
             {result.message}
           </p>
         )}
       </div>
+
+      {confirming && preview !== null ? (
+        <section
+          ref={confirmRef}
+          tabIndex={-1}
+          role="dialog"
+          aria-modal="false"
+          aria-label="Confirm replacing the roster"
+          data-testid="import-confirm-dialog"
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && !pending) setConfirming(false);
+          }}
+          className="flex flex-col gap-3 rounded border border-danger-300 bg-danger-50 p-3 focus:outline-none dark:border-danger-900 dark:bg-danger-950/40"
+        >
+          <h3 className="text-sm font-semibold">Replace the entire roster?</h3>
+          <p className="text-xs text-slate-700 dark:text-slate-300">
+            Every current employee record is deleted and replaced with the {preview.rows.length}{" "}
+            {preview.rows.length === 1 ? "row" : "rows"} in{" "}
+            <span className="font-medium">{fileName}</span>. This is the table §G8 reads to decide
+            who may see and change whose limit, and the change cannot be undone.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={confirm}
+              disabled={pending}
+              data-testid="import-confirm"
+              className="inline-flex min-h-11 items-center justify-center rounded bg-danger-600 px-3 py-2 text-sm font-medium text-white hover:bg-danger-700 disabled:opacity-60 md:min-h-0 md:py-1.5"
+            >
+              {pending ? "Importing…" : "Replace all records"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              disabled={pending}
+              data-testid="import-cancel"
+              className="inline-flex min-h-11 items-center justify-center rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 md:min-h-0 md:py-1.5 dark:border-slate-600 dark:hover:bg-slate-800"
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       {result?.ok === true ? (
         // A full navigation, not `router.refresh()`: the roster this page was
@@ -151,7 +208,7 @@ export function EmployeeImport() {
         <a
           href="/admin"
           data-testid="import-reload"
-          className="text-sm font-medium text-indigo-700 hover:underline dark:text-indigo-300"
+          className="text-sm font-medium text-brand-700 hover:underline dark:text-brand-300"
         >
           Reload the admin page
         </a>

@@ -78,7 +78,7 @@ function ChartTooltip({ active, payload }: TooltipContentProps<TooltipValueType,
     <div className="rounded border border-slate-200 bg-white px-2 py-1 text-xs shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <p className="font-medium">{formatDate(datum.date)}</p>
       <p className="tabular-nums">{formatMoney(datum.amount)}</p>
-      {datum.settled === null ? <p className="text-amber-600">provisional</p> : null}
+      {datum.settled === null ? <p className="text-warn-600">provisional</p> : null}
     </div>
   );
 }
@@ -119,8 +119,23 @@ export function SpendOverTimeChart({ points, watermarkDate }: SpendOverTimeChart
     );
   }
 
+  // The chart itself is an SVG with no text a screen reader can use, so the
+  // wrapper carries a one-line summary of the same trend the sighted reader sees.
+  const first = data[0]!.date;
+  const last = data[data.length - 1]!.date;
+  const chartSummary =
+    `Line chart of daily spend across your scope, ${formatDate(first)} to ${formatDate(last)}. ` +
+    (watermarkDate === null
+      ? "Every point is provisional; costs have not finished syncing."
+      : `Spend after ${formatDate(watermarkDate)} is provisional and still being revised.`);
+
   return (
-    <div data-testid="spend-chart" className="h-56 w-full sm:h-72">
+    <div
+      data-testid="spend-chart"
+      role="img"
+      aria-label={chartSummary}
+      className="h-56 w-full sm:h-72"
+    >
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200 dark:stroke-slate-800" />
@@ -141,6 +156,13 @@ export function SpendOverTimeChart({ points, watermarkDate }: SpendOverTimeChart
             className="text-slate-400"
           />
           <Tooltip content={ChartTooltip} />
+          {/*
+            These two strokes are the one place a raw value survives the move to
+            semantic tokens: an SVG `stroke` attribute cannot read a CSS
+            variable, so it stays a literal. The values mirror `--color-brand-600`
+            (settled) and `--color-warn-500` (provisional), and the legend
+            swatches below use the `brand`/`warn` tokens — keep the three in step.
+          */}
           <Line
             type="monotone"
             dataKey="settled"
@@ -166,9 +188,9 @@ export function SpendOverTimeChart({ points, watermarkDate }: SpendOverTimeChart
       </ResponsiveContainer>
 
       <p data-testid="chart-legend" className="mt-2 text-xs text-slate-500">
-        <span className="mr-1 inline-block h-0.5 w-4 align-middle bg-indigo-600" /> settled
+        <span className="mr-1 inline-block h-0.5 w-4 align-middle bg-brand-600" /> settled
         <span className="mx-1">·</span>
-        <span className="mr-1 inline-block h-0.5 w-4 align-middle bg-amber-500" />
+        <span className="mr-1 inline-block h-0.5 w-4 align-middle bg-warn-500" />
         {watermarkDate === null
           ? "provisional tail — costs have not synced yet"
           : `after ${formatDate(watermarkDate)} = provisional (still being revised, up to 30 days)`}
@@ -214,14 +236,14 @@ export function TopSpenderBars({ rows }: { rows: SpenderBar[] }) {
           >
             <Link
               href={`/members/${row.employeeId}`}
-              className="w-28 shrink-0 truncate text-indigo-700 hover:underline sm:w-44 dark:text-indigo-300"
+              className="w-28 shrink-0 truncate text-brand-700 hover:underline sm:w-44 dark:text-brand-300"
             >
               {row.name}
             </Link>
             <span className="h-2 min-w-1 grow overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
               <span
                 aria-hidden="true"
-                className="block h-full rounded-full bg-indigo-500"
+                className="block h-full rounded-full bg-brand-500"
                 style={{ width: `${width}%` }}
               />
             </span>

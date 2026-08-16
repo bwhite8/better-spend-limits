@@ -36,8 +36,8 @@ export const dynamic = "force-dynamic";
 type Tab = "pending" | "resolved";
 
 const STATUS_TONES: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
-  approved: "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200",
+  pending: "bg-warn-100 text-warn-900 dark:bg-warn-950 dark:text-warn-200",
+  approved: "bg-success-100 text-success-900 dark:bg-success-950 dark:text-success-200",
   denied: "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
 };
 
@@ -102,7 +102,7 @@ function RequestCard({ entry, prefillDollars, suppressDefault }: CardProps) {
             <Link
               href={`/members/${entry.requester.id}`}
               data-testid="requester-name"
-              className="font-medium text-indigo-700 hover:underline dark:text-indigo-300"
+              className="font-medium text-brand-700 hover:underline dark:text-brand-300"
             >
               {entry.displayName}
             </Link>
@@ -112,7 +112,7 @@ function RequestCard({ entry, prefillDollars, suppressDefault }: CardProps) {
             <span
               data-testid="unmatched-flag"
               title="This API user matches no row in the employee roster."
-              className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+              className="rounded bg-warn-100 px-1.5 py-0.5 text-xs font-medium text-warn-900 dark:bg-warn-950 dark:text-warn-200"
             >
               No employee record
             </span>

@@ -124,7 +124,7 @@ export function AuditTable({ data, names }: AuditTableProps) {
           <Link
             href={pageHref(data.page - 1)}
             data-testid="audit-prev"
-            className="text-indigo-700 hover:underline dark:text-indigo-300"
+            className="text-brand-700 hover:underline dark:text-brand-300"
           >
             ← Newer
           </Link>
@@ -136,7 +136,7 @@ export function AuditTable({ data, names }: AuditTableProps) {
           <Link
             href={pageHref(data.page + 1)}
             data-testid="audit-next"
-            className="text-indigo-700 hover:underline dark:text-indigo-300"
+            className="text-brand-700 hover:underline dark:text-brand-300"
           >
             Older →
           </Link>
