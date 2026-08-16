@@ -23,6 +23,7 @@ import type { EditRole } from "@/db/config-defaults";
 import { employees, type Employee } from "@/db/schema";
 import { Money, SpendBar } from "@/components/money";
 import { SourceBadge } from "@/components/source-badge";
+import { CARD } from "@/components/surface";
 import { currentEmployee } from "@/lib/identity";
 import { loadSnapshotIndex, requestsForUser, snapshotFor } from "@/lib/members";
 import {
@@ -161,7 +162,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
   const allEditorIds = [...new Set([...editorIds, ...delegated.map((editor) => editor.id)])];
 
   return (
-    <section className="flex max-w-4xl flex-col gap-8">
+    <section className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
         <Link href="/members" className="text-sm text-brand-700 hover:underline dark:text-brand-300">
           ← Users
@@ -182,8 +183,8 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
         </p>
       </header>
 
-      <div className="grid gap-8 md:grid-cols-2">
-        <article className="flex flex-col gap-4" data-testid="limit-card">
+      <div className="grid gap-6 md:grid-cols-2">
+        <article className={`${CARD} flex flex-col gap-4 p-4 sm:p-5`} data-testid="limit-card">
           <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
             Effective spend limit
           </h2>
@@ -226,7 +227,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
           </div>
         </article>
 
-        <article className="flex flex-col gap-4" data-testid="identity-card">
+        <article className={`${CARD} flex flex-col gap-4 p-4 sm:p-5`} data-testid="identity-card">
           <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">Reporting</h2>
           <dl className="flex flex-col gap-3">
             {CHAIN.map(({ column, label }) => {
@@ -251,7 +252,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
         </article>
       </div>
 
-      <article className="flex flex-col gap-3" data-testid="request-card">
+      <article className={`${CARD} flex flex-col gap-3 p-4 sm:p-5`} data-testid="request-card">
         <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
           Increase request
         </h2>
@@ -292,7 +293,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
         )}
       </article>
 
-      <article className="flex flex-col gap-3" data-testid="edit-access">
+      <article className={`${CARD} flex flex-col gap-3 p-4 sm:p-5`} data-testid="edit-access">
         <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">Edit access</h2>
         {allEditorIds.length === 0 ? (
           <p className="text-sm text-slate-500">

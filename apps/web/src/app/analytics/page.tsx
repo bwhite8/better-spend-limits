@@ -31,6 +31,7 @@ import Link from "next/link";
 
 import { getDb } from "@/db/client";
 import { Money, SpendBar } from "@/components/money";
+import { CARD } from "@/components/surface";
 import {
   allEmployeeIds,
   costWatermark,
@@ -60,13 +61,6 @@ const WOW_MULTIPLE = 3;
 
 /** Rows in the month-to-date bar list. */
 const TOP_SPENDER_COUNT = 10;
-
-/**
- * The elevated-surface token. A white panel with a soft shadow that reads as
- * lifted off the slate canvas (globals.css `body`). Inlined as a string rather
- * than a component so a plain `<article>`/`<div>` can opt in without a wrapper.
- */
-const CARD = "rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900";
 
 function Section({
   title,

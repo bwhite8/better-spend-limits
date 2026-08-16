@@ -110,20 +110,27 @@ const NO_TIER_SELECTION: TierSelection = { tier2: "", tier3: "", tier4: "" };
  * Column headers. `className` travels with the label so a column can be hidden
  * in both places at once — the header and its body cell must disappear
  * together, or the remaining cells shift a column to the left.
+ *
+ * Email, Source and the pending flag defer to `lg`, not `md`: at the `md`
+ * breakpoint the 240px sidebar has already appeared, leaving a tablet ~480px
+ * for the table, and all six columns there pushed the primary Period-to-date
+ * spend column into a horizontal scroll nobody discovers. Below `lg` the table
+ * carries only the three columns a decision actually needs — Name, Limit,
+ * spend — and the rest return once there is width for them.
  */
 const HEADERS: { label: string; className?: string }[] = [
   { label: "Name" },
-  { label: "Email", className: "hidden md:table-cell" },
+  { label: "Email", className: "hidden lg:table-cell" },
   { label: "Limit" },
-  { label: "Source", className: "hidden md:table-cell" },
+  { label: "Source", className: "hidden lg:table-cell" },
   { label: "Period-to-date spend" },
-  { label: "", className: "hidden md:table-cell" },
+  { label: "", className: "hidden lg:table-cell" },
 ];
 
 /** Shared by every body cell: a card line on a phone, a table cell above `md`. */
 const CELL = "block px-2 py-1 md:table-cell md:py-2";
-/** A cell that only exists on the wide layout. */
-const WIDE_ONLY_CELL = "hidden px-2 py-2 md:table-cell";
+/** A cell that only exists on the wide (`lg`+) layout — see {@link HEADERS}. */
+const WIDE_ONLY_CELL = "hidden px-2 py-2 lg:table-cell";
 
 /**
  * `Showing 1–50 of 250`, and `(filtered from 250)` when a filter is narrowing

@@ -103,7 +103,7 @@ function LeadRow({ lead, leaders }: { lead: AiLeadEntry; leaders: AiLeadPerson[]
             onClick={save}
             disabled={pending}
             data-testid="ai-lead-save"
-            className="inline-flex min-h-11 shrink-0 items-center justify-center rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60 md:min-h-0 md:py-1.5 dark:bg-slate-100 dark:text-slate-900"
+            className="inline-flex min-h-11 shrink-0 items-center justify-center rounded bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60 md:min-h-0 md:py-1.5"
           >
             {pending ? "Saving…" : "Save delegation"}
           </button>

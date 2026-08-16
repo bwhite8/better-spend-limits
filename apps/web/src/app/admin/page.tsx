@@ -25,6 +25,7 @@
 
 import { getDb } from "@/db/client";
 import { employees } from "@/db/schema";
+import { CARD } from "@/components/surface";
 import { aiLeadDirectory } from "@/lib/ai-leads";
 import { loadAppConfig } from "@/lib/config";
 import { currentEmployee } from "@/lib/identity";
@@ -40,9 +41,6 @@ import { EmployeeImport } from "./import";
 import { UnmatchedMembers, unmatchedMembers } from "./unmatched";
 
 export const dynamic = "force-dynamic";
-
-/** Matches the elevated-surface token used on Analytics (globals.css `body`). */
-const CARD = "rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900";
 
 function Section({
   id,

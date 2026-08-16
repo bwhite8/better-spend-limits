@@ -91,7 +91,17 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         */}
         <div className="flex min-h-screen flex-col md:h-dvh md:min-h-0 md:flex-row md:overflow-hidden">
           <Nav {...navProps} />
-          <main className="min-w-0 flex-1 p-4 md:overflow-y-auto md:p-6">{children}</main>
+          {/*
+            One content measure for the whole app. `<main>` fills the space
+            beside the sidebar, but the page itself lives in a centered column
+            capped at `max-w-5xl` — so on a wide monitor content is framed with
+            even margins instead of stranded against the left edge, and every
+            route shares the same width. Genuinely wide content (the analytics
+            chart, the users table) still fills this column.
+          */}
+          <main className="min-w-0 flex-1 p-4 md:overflow-y-auto md:p-6">
+            <div className="mx-auto w-full max-w-5xl">{children}</div>
+          </main>
         </div>
       </body>
     </html>
