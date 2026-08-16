@@ -50,9 +50,17 @@ export function SyncStatus({ syncedAt, initialLabel, stale, errored }: SyncStatu
     setMessage(null);
     startTransition(async () => {
       try {
-        const response = await fetch("/api/sync", { method: "POST" });
+        // `force` so the button always refreshes, not only when the snapshot has
+        // gone stale on its own; the endpoint rate-limits this per client.
+        const response = await fetch("/api/sync", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ force: true }),
+        });
         const body: unknown = await response.json().catch(() => null);
-        if (!response.ok) {
+        if (response.status === 429) {
+          setMessage("Too many refreshes — wait a moment.");
+        } else if (!response.ok) {
           setMessage("Refresh failed");
         } else if (body !== null && typeof body === "object" && (body as { ran?: unknown }).ran === false) {
           setMessage("Already refreshing…");

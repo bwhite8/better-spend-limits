@@ -13,7 +13,7 @@ import { IN_MEMORY_DATABASE } from "@/db/paths";
 import { auditLog } from "@/db/schema";
 import { seedDatabase } from "@/db/seed";
 
-import { parseAuditDetail, writeAudit } from "./audit";
+import { MAX_AUDIT_LOG_ROWS, parseAuditDetail, writeAudit } from "./audit";
 
 let db: AppDatabase;
 
@@ -100,6 +100,43 @@ describe("writeAudit", () => {
     expect(stored.map((row) => row.action)).toEqual(["set_limit", "delete_limit", "approve_request"]);
     expect(stored.map((row) => row.id)).toEqual([...stored.map((row) => row.id)].sort((a, b) => a - b));
     expect(new Set(stored.map((row) => row.id)).size).toBe(3);
+  });
+});
+
+describe("writeAudit — bounded growth", () => {
+  it("leaves the tail alone until the table exceeds the ceiling", () => {
+    for (let i = 0; i < 5; i += 1) {
+      writeAudit(db, { actor: { email: FIXTURE.admin.email }, action: "set_limit" });
+    }
+    expect(rows()).toHaveLength(5);
+  });
+
+  it("prunes anything older than the newest MAX_AUDIT_LOG_ROWS", () => {
+    // The oldest real row (id 1), then a sentinel that jumps the autoincrement
+    // sequence so the very next write crosses the ceiling — far cheaper than
+    // inserting twenty thousand rows.
+    const oldest = writeAudit(db, { actor: { email: FIXTURE.admin.email }, action: "set_limit" });
+    expect(oldest.id).toBe(1);
+
+    db.insert(auditLog)
+      .values({
+        id: MAX_AUDIT_LOG_ROWS + 1,
+        at: new Date("2026-08-16T00:00:00.000Z").toISOString(),
+        actor_email: FIXTURE.admin.email,
+        action: "set_limit",
+        detail: "{}",
+      })
+      .run();
+
+    // Next auto id is MAX_AUDIT_LOG_ROWS + 2, so the prune deletes id < 2 — the
+    // oldest row — while the sentinel and the newcomer (both within the window)
+    // survive.
+    const newest = writeAudit(db, { actor: { email: FIXTURE.admin.email }, action: "set_limit" });
+    expect(newest.id).toBe(MAX_AUDIT_LOG_ROWS + 2);
+
+    const ids = rows().map((row) => row.id);
+    expect(ids).not.toContain(oldest.id);
+    expect(ids).toEqual([MAX_AUDIT_LOG_ROWS + 1, MAX_AUDIT_LOG_ROWS + 2]);
   });
 });
 

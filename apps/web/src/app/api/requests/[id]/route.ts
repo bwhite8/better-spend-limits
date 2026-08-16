@@ -28,6 +28,8 @@ import type { Employee, IncreaseRequestSnapshotRow } from "@/db/schema";
 import { AnthropicApiError, createAnthropicClient } from "@/lib/anthropic/client";
 import { writeAudit, type AuditAction } from "@/lib/audit";
 import { loadAppConfig } from "@/lib/config";
+import { BodyTooLargeError, bodyTooLargeResponse, enforceRateLimit, readLimitedJson } from "@/lib/http";
+import { MUTATION_RATE_LIMIT } from "@/lib/rate-limit";
 import { currentEmployee } from "@/lib/identity";
 import { LimitWriteError, refreshMemberSnapshot, requireWireAmount } from "@/lib/member-limit";
 import { authorityIdsOf, canActOnRequest } from "@/lib/permissions";
@@ -134,15 +136,20 @@ function apiFailure(
 /* -------------------------------------------------------------------------- */
 
 export async function POST(httpRequest: Request, context: RouteContext): Promise<Response> {
+  const limited = enforceRateLimit(httpRequest, MUTATION_RATE_LIMIT, "request-action");
+  if (limited) return limited;
+
   const resolved = await resolveActContext(context);
   if (resolved instanceof Response) return resolved;
   const { db, actor, request, requester } = resolved;
 
-  const body = (await httpRequest.json().catch(() => null)) as {
-    action?: unknown;
-    amount?: unknown;
-    suppressNotification?: unknown;
-  } | null;
+  let body: { action?: unknown; amount?: unknown; suppressNotification?: unknown } | null;
+  try {
+    body = (await readLimitedJson(httpRequest)) as typeof body;
+  } catch (error) {
+    if (error instanceof BodyTooLargeError) return bodyTooLargeResponse(error);
+    throw error;
+  }
 
   const action = body?.action;
   if (action !== "approve" && action !== "deny") {

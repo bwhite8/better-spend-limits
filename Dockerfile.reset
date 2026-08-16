@@ -1,0 +1,18 @@
+# The `demo-reset` cron service.
+#
+# The demo's state lives on the web service's Railway volume, and a Railway
+# volume attaches to exactly one service — so the reset has to run *inside* the
+# web app, not beside it. This image does nothing but make one authenticated
+# HTTP call to the web app's reset endpoint; Railway runs it on a cron schedule
+# and it exits.
+#
+# Runtime environment (set on the Railway service, not baked in):
+#   RESET_URL    https://<web-service-domain>/api/admin/reset
+#   RESET_TOKEN  the shared secret that also sits on the web service
+FROM alpine:3.20
+
+RUN apk add --no-cache curl
+
+# `-f` so a non-2xx response is a failed run (visible in Railway), `-sS` to stay
+# quiet but still print real errors, `-m 30` so a hung request cannot linger.
+CMD ["sh", "-c", "curl -fsS -m 30 -X POST -H \"authorization: Bearer ${RESET_TOKEN}\" \"${RESET_URL}\" && echo && echo '[demo-reset] done'"]

@@ -19,7 +19,14 @@ import { IN_MEMORY_DATABASE } from "@/db/paths";
 import { employees } from "@/db/schema";
 import { seedDatabase } from "@/db/seed";
 import { applyEmployeeImport } from "@/lib/employee-roster";
-import { EMPLOYEE_CSV_HEADER, parseEmployeeCsv } from "@/lib/import-employees";
+import {
+  EMPLOYEE_CSV_HEADER,
+  MAX_EMPLOYEE_EMAIL_LENGTH,
+  MAX_EMPLOYEE_ID_LENGTH,
+  MAX_EMPLOYEE_NAME_LENGTH,
+  MAX_EMPLOYEE_ROWS,
+  parseEmployeeCsv,
+} from "@/lib/import-employees";
 
 const HEADER = EMPLOYEE_CSV_HEADER.join(",");
 
@@ -233,6 +240,66 @@ describe("parseEmployeeCsv — refusals", () => {
     );
 
     expect(errors.map((issue) => issue.line)).toEqual([2, 3, 4]);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* parseEmployeeCsv — hostile-upload ceilings                                 */
+/* -------------------------------------------------------------------------- */
+
+describe("parseEmployeeCsv — import ceilings", () => {
+  it("refuses a file with more than MAX_EMPLOYEE_ROWS rows, before per-row work", () => {
+    const rows = Array.from(
+      { length: MAX_EMPLOYEE_ROWS + 1 },
+      (_unused, i) => `emp_${i},N,u${i}@example.net,,,,,,0`,
+    );
+
+    const { rows: parsed, errors } = parseEmployeeCsv(csv(...rows));
+
+    expect(parsed).toEqual([]);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.message).toContain(`${MAX_EMPLOYEE_ROWS}-employee import limit`);
+  });
+
+  it("accepts a file exactly at the row ceiling", () => {
+    const rows = Array.from(
+      { length: MAX_EMPLOYEE_ROWS },
+      (_unused, i) => `emp_${i},N,u${i}@example.net,,,,,,0`,
+    );
+    // One admin so a real import of this file would also be allowed.
+    rows[0] = "emp_0,N,u0@example.net,,,,,,1";
+
+    const { rows: parsed, errors } = parseEmployeeCsv(csv(...rows));
+
+    expect(errors).toEqual([]);
+    expect(parsed).toHaveLength(MAX_EMPLOYEE_ROWS);
+  });
+
+  it("rejects an over-long name, email, or id instead of storing it", () => {
+    const longName = "N".repeat(MAX_EMPLOYEE_NAME_LENGTH + 1);
+    const longEmail = `${"a".repeat(MAX_EMPLOYEE_EMAIL_LENGTH)}@example.net`;
+    const longId = "emp_".padEnd(MAX_EMPLOYEE_ID_LENGTH + 1, "9");
+
+    const { rows, errors } = parseEmployeeCsv(
+      csv(
+        `emp_1,${longName},ada@example.net,,,,,,1`,
+        `emp_2,Grace,${longEmail},,,,,,0`,
+        `${longId},Kath,kath@example.net,,,,,,0`,
+      ),
+    );
+
+    expect(rows).toEqual([]);
+    const messages = errors.map((issue) => issue.message).join("\n");
+    expect(messages).toContain("name is too long");
+    expect(messages).toContain("email is too long");
+    expect(messages).toContain("employee_id is too long");
+  });
+
+  it("rejects an over-long manager reference", () => {
+    const longRef = "emp_".padEnd(MAX_EMPLOYEE_ID_LENGTH + 1, "9");
+    const { errors } = parseEmployeeCsv(csv(`emp_1,Ada,ada@example.net,${longRef},,,,,1`));
+
+    expect(errors.some((issue) => issue.message.includes("direct_manager_id is too long"))).toBe(true);
   });
 });
 

@@ -26,6 +26,7 @@ import { loadAppConfig } from "@/lib/config";
 import { applyEmployeeImport, type ImportSummary } from "@/lib/employee-roster";
 import { currentEmployee } from "@/lib/identity";
 import { parseEmployeeCsv } from "@/lib/import-employees";
+import { currentClientIp, MUTATION_RATE_LIMIT, rateLimit } from "@/lib/rate-limit";
 
 import type { AdminActionResult, AiLeadAssignmentInput, ConfigUpdateInput } from "./types";
 
@@ -36,6 +37,22 @@ const NOT_ADMIN: AdminActionResult = {
   ok: false,
   message: "Only administrators can change application settings.",
 };
+
+const RATE_LIMITED: AdminActionResult = {
+  ok: false,
+  message: "Too many requests — please slow down and try again in a few seconds.",
+};
+
+/**
+ * Throttle an admin write by caller IP. Server actions are ordinary POST
+ * endpoints reachable without ever rendering the form, so — like the BFF routes
+ * — they cannot rely on the UI to pace them (§G8). Returns the refusal to hand
+ * straight back, or `null` to proceed.
+ */
+async function rateLimitExceeded(): Promise<AdminActionResult | null> {
+  const result = rateLimit(`admin-action:${await currentClientIp()}`, MUTATION_RATE_LIMIT);
+  return result.ok ? null : RATE_LIMITED;
+}
 
 /** The label the assignment form uses for an empty list, so a removal reads as one. */
 const NOBODY = "nobody";
@@ -115,6 +132,9 @@ function changedKeys(
  * genuinely moved.
  */
 export async function updateConfig(input: ConfigUpdateInput): Promise<AdminActionResult> {
+  const limited = await rateLimitExceeded();
+  if (limited) return limited;
+
   const db = getDb();
   const actor = await resolveAdmin(db);
   if (actor === null) return NOT_ADMIN;
@@ -168,6 +188,9 @@ export async function updateConfig(input: ConfigUpdateInput): Promise<AdminActio
 export async function updateAiLeadAssignments(
   input: AiLeadAssignmentInput,
 ): Promise<AdminActionResult> {
+  const limited = await rateLimitExceeded();
+  if (limited) return limited;
+
   const db = getDb();
   const actor = await resolveAdmin(db);
   if (actor === null) return NOT_ADMIN;
@@ -218,6 +241,9 @@ export async function updateAiLeadAssignments(
  * upload a corrected file.
  */
 export async function importEmployees(csv: string): Promise<AdminActionResult> {
+  const limited = await rateLimitExceeded();
+  if (limited) return limited;
+
   const db = getDb();
   const actor = await resolveAdmin(db);
   if (actor === null) return NOT_ADMIN;

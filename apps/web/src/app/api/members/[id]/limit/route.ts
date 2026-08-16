@@ -32,6 +32,8 @@ import { getDb, type AppDatabase } from "@/db/client";
 import { employees, type Employee, type SpendLimitSnapshotRow } from "@/db/schema";
 import { AnthropicApiError, createAnthropicClient } from "@/lib/anthropic/client";
 import { writeAudit, type AuditAction } from "@/lib/audit";
+import { BodyTooLargeError, bodyTooLargeResponse, enforceRateLimit, readLimitedJson } from "@/lib/http";
+import { MUTATION_RATE_LIMIT } from "@/lib/rate-limit";
 import { currentEmployee } from "@/lib/identity";
 import {
   LimitWriteError,
@@ -164,13 +166,23 @@ function apiFailure(
 /* -------------------------------------------------------------------------- */
 
 export async function POST(request: Request, context: RouteContext): Promise<Response> {
+  const limited = enforceRateLimit(request, MUTATION_RATE_LIMIT, "member-limit");
+  if (limited) return limited;
+
   const resolved = await resolveWriteContext(context);
   if (resolved instanceof Response) return resolved;
   const { db, actor, target, snapshot, userId } = resolved;
 
+  let body: unknown;
+  try {
+    body = await readLimitedJson(request);
+  } catch (error) {
+    if (error instanceof BodyTooLargeError) return bodyTooLargeResponse(error);
+    throw error;
+  }
+
   let amount: string;
   try {
-    const body: unknown = await request.json().catch(() => null);
     amount = requireWireAmount((body as { amount?: unknown } | null)?.amount);
   } catch (error) {
     if (error instanceof LimitWriteError) return fail(error.status, error.code, error.message);
@@ -217,7 +229,10 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
 /* DELETE — remove the per-user override                                      */
 /* -------------------------------------------------------------------------- */
 
-export async function DELETE(_request: Request, context: RouteContext): Promise<Response> {
+export async function DELETE(request: Request, context: RouteContext): Promise<Response> {
+  const limited = enforceRateLimit(request, MUTATION_RATE_LIMIT, "member-limit");
+  if (limited) return limited;
+
   const resolved = await resolveWriteContext(context);
   if (resolved instanceof Response) return resolved;
   const { db, actor, target, snapshot, userId } = resolved;

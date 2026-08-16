@@ -19,6 +19,28 @@
  * self-referencing foreign keys would reject it anyway).
  */
 
+/**
+ * Import ceilings — a defence against a hostile upload, not a business rule.
+ *
+ * A full-replace roster import that any admin can trigger is the cheapest way to
+ * hurt this app: the whole roster is read into memory and serialised into every
+ * page render (§G8 identity is "look the email up in `employees`"), so a file
+ * with tens of thousands of rows degrades the app for everyone, not just the
+ * uploader. On the public demo "any admin" means "anyone", so the parser refuses
+ * an implausibly large file outright and bounds every field a row can carry.
+ *
+ * The row ceiling is generous — twenty times the synthetic org and comfortably
+ * past the "hundreds of users" this is sized for (README) — so a real fork bumps
+ * one constant only if it genuinely onboards thousands at once.
+ */
+export const MAX_EMPLOYEE_ROWS = 5000;
+
+/** Longest each free-text / id field may be, in characters. */
+export const MAX_EMPLOYEE_ID_LENGTH = 128;
+export const MAX_EMPLOYEE_NAME_LENGTH = 200;
+/** RFC 5321's addr-spec ceiling. */
+export const MAX_EMPLOYEE_EMAIL_LENGTH = 320;
+
 /** The exact header row an import must carry, in this exact order. */
 export const EMPLOYEE_CSV_HEADER = [
   "employee_id",
@@ -207,6 +229,20 @@ export function parseEmployeeCsv(text: string): ParsedEmployeeCsv {
     };
   }
 
+  // Refuse an implausibly large file before doing per-row work, so a hostile
+  // upload cannot turn one request into a roster that slows every later render.
+  if (body.length > MAX_EMPLOYEE_ROWS) {
+    return {
+      rows: [],
+      errors: [
+        {
+          line: header.line,
+          message: `Too many rows: ${body.length} exceeds the ${MAX_EMPLOYEE_ROWS}-employee import limit.`,
+        },
+      ],
+    };
+  }
+
   const errors: CsvIssue[] = [];
   const rows: EmployeeCsvRow[] = [];
   const lineOfRow = new Map<EmployeeCsvRow, number>();
@@ -233,11 +269,24 @@ export function parseEmployeeCsv(text: string): ParsedEmployeeCsv {
       report(message);
     };
 
+    const tooLong = (label: string, value: string, max: number): void => {
+      if (value.length > max) reject(`${label} is too long (max ${max} characters, found ${value.length}).`);
+    };
+
     if (id === "") reject("employee_id is required.");
+    else tooLong("employee_id", id, MAX_EMPLOYEE_ID_LENGTH);
     if (name === "") reject("name is required.");
+    else tooLong("name", name, MAX_EMPLOYEE_NAME_LENGTH);
     if (email === "") reject("email is required.");
     else if (!looksLikeEmail(email)) reject(`"${rawEmail}" is not an email address.`);
+    else tooLong("email", email, MAX_EMPLOYEE_EMAIL_LENGTH);
     if (adminFlag === null) reject(`is_admin must be 0 or 1 — found "${rest[5]}".`);
+
+    // The five reference columns hold employee ids; hold them to the same ceiling
+    // so an oversized value is a clean error, not a giant string in the database.
+    for (let column = 0; column < REFERENCE_COLUMNS.length; column += 1) {
+      tooLong(REFERENCE_COLUMNS[column], rest[column], MAX_EMPLOYEE_ID_LENGTH);
+    }
 
     const firstId = idLines.get(id);
     if (id !== "" && firstId !== undefined) reject(`employee_id "${id}" is already used on line ${firstId}.`);

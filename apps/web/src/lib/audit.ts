@@ -13,8 +13,19 @@
  * is what makes an entry reconcilable against Anthropic's own logs.
  */
 
+import { lt } from "drizzle-orm";
+
 import { auditLog, type AuditLogRow } from "@/db/schema";
 import type { AppDatabase } from "@/db/client";
+
+/**
+ * How many audit rows to keep. The log is append-only and, on the demo, writable
+ * by anyone (§G6) — without a ceiling a write loop fills the disk the volume sits
+ * on. Twenty thousand rows is generous history for a demo (weeks of real use) and
+ * a few tens of MB at most; a production fork that must retain everything should
+ * raise this and ship the log somewhere durable instead.
+ */
+export const MAX_AUDIT_LOG_ROWS = 20_000;
 
 /** The §G7 action vocabulary. */
 export const AUDIT_ACTIONS = [
@@ -67,6 +78,11 @@ export function writeAudit(db: AppDatabase, input: WriteAuditInput): AuditLogRow
     })
     .returning()
     .get();
+
+  // Trim the tail in the same call that grew it. `id` autoincrements, so
+  // "older than the newest N" is `id < row.id - N` — an indexed range delete
+  // that is a no-op until the table first exceeds the ceiling.
+  db.delete(auditLog).where(lt(auditLog.id, row.id - MAX_AUDIT_LOG_ROWS)).run();
 
   return row;
 }
