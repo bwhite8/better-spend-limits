@@ -25,6 +25,15 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 /**
+ * Upper bound on options the dev user switcher loads. The whole list is
+ * serialized into the shell of every render, so it must not be unbounded. The
+ * import path already caps the table at `MAX_EMPLOYEE_ROWS`; this is defense in
+ * depth, and it clears the 250-person demo with room to spare. The switcher is
+ * dev-only (see below), so this never constrains a real, proxy-authed roster.
+ */
+const SWITCHER_MAX_OPTIONS = 500;
+
+/**
  * Everything the sidebar needs, in one pass over the database.
  *
  * A database that cannot be read (a clone where `db:migrate` has not run yet)
@@ -48,18 +57,33 @@ async function loadNavProps(): Promise<NavProps> {
     // spends the organization's shared rate-limit budget (§G4).
     if (actor !== null) await ensureFreshSync(db);
 
-    const roster = db.select().from(employees).orderBy(employees.name, employees.id).all();
     const state = readSyncState(db).filter((row) =>
       (SYNC_RESOURCES as readonly string[]).includes(row.resource),
     );
     const syncedAt = oldestSyncedAt(db);
 
+    // Dev mode only: in `proxy` mode the SSO header is the identity and the
+    // impersonation action throws, so offering the control would be a lie —
+    // and the roster read is only needed for the switcher, so proxy mode skips
+    // it entirely rather than loading a table it never serializes.
+    const switcher = devMode
+      ? {
+          options: switcherOptionsFor(
+            db
+              .select()
+              .from(employees)
+              .orderBy(employees.name, employees.id)
+              .limit(SWITCHER_MAX_OPTIONS)
+              .all(),
+          ),
+          currentEmail: email,
+        }
+      : null;
+
     return {
       isAdmin: actor?.is_admin === true,
       currentUser: actor === null ? null : { name: actor.name, email: actor.email },
-      // Dev mode only: in `proxy` mode the SSO header is the identity and the
-      // impersonation action throws, so offering the control would be a lie.
-      switcher: devMode ? { options: switcherOptionsFor(roster), currentEmail: email } : null,
+      switcher,
       sync: {
         syncedAt,
         initialLabel: syncLabel(syncedAt),
